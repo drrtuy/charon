@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title></title>
+</head>
+<body>
+    <li>{{ request.method }}</li>
+    {% for item in request.headers %}
+        <li>{{ item }}</li>
+    {% endfor %}
+</body>
+</html>
