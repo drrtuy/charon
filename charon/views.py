@@ -1,9 +1,14 @@
 from charon import app
-from flask import request
+from flask import request, render_template
 
-@app.route("/v1/radius/subs/")
+@app.route("/v1/radius/subs/", methods=['POST','GET'])
 def doAllowUser():
-    return str(request.method) + str(request.headers) + str(request.values)
+    r = ""
+    for i in request.headers:
+        r += str(i)
+        r += "\n"
+    print request.values
+    return render_template('subs.html')
 
 @app.route("/postauth/")
 def doPostauth():
