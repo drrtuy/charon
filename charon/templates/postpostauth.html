@@ -1,29 +1,22 @@
 <!DOCTYPE html>
-
 <html>
 <head>
   <title></title>
 </head>
 <body>
-    <li>{{ request.method }}</li>
-    {% for item in request.headers %}
-        <li>{{ item }}</li>
-    {% endfor %}
 
-Mac: {{ extradata.mac }}<br>
-IP: {{ extradata.ip }}<br>
-Username: {{ extradata.username }}<br>
-Link-login: {{ extradata.linklogin }}<br>
-Link-orig: {{ extradata.linkorig }}<br>
-Error: {{ extradata.error }}<br>
-
-<form name="login" action="{{ extradata.linklogin }}" method="post" >
-<input type="hidden" name="dst" value="extradata.linkorig" />
-<input type="hidden" name="popup" value="true" />
-Username :<input name="username" type="text" /><br>
-Password : <input name="password" type="password" /><br>
+<form name="login" action="{{ formdata.hotspot_login_url }}" method="post" >
+<input type="hidden" name="dst" value="{{ formdata.origin_url }}" />
+<input type="hidden" name="popup" value="no" />
+Username :<input name="username" type="text" value="{{ formdata.username }}"/><br>
+Password :<input name="password" type="password" value="{{ formdata.password }}"/><br>
 <input type="submit" value="Login" />
 </form>
+
+<script language="JavaScript">
+   document.login.submit();
+</script>
+
 
 </body>
 </html>

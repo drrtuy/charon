@@ -1,0 +1,14 @@
+<html>
+<head><title>...</title></head>
+<body>
+<noscript>
+<center><b>JavaScript required. Enable JavaScript to continue.</b></center>
+</noscript>
+<form name="redirect" action="{{ url }}" method="post">
+<input type="hidden" name="client_id" value="{{ extradata.client_id }}">
+<input type="hidden" name="hotspot_id" value="{{ extradata.hotspot_id }}">
+<input type="hidden" name="entrypoint_id" value="{{ extradata.entrypoint_id }}">
+</form>
+<script language="JavaScript">document.redirect.submit();</script>
+</body>
+</html>
