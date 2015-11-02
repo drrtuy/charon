@@ -64,7 +64,7 @@ OUT
     True || False (if the cmd in the POST msg succeded False otherwise. )
 """
 def doAllowUser(request):
-    print "doAllowUser"
+    #print "doAllowUser"
     clientID = request.values.get('client_id')
     hotspotID = request.values.get('hotspot_id')
     formData = {
@@ -179,8 +179,9 @@ def idleCheck(request):
     if not clientID or not hotspotID:
         return False
 
-    try:
+    try:        
         c = connect(host = h, user = u, password = p, database = d)
+        print "idleCheck", c
         cursor = c.cursor()
         print "idleCheck before q", clientID, hotspotID
 
@@ -199,7 +200,7 @@ def idleCheck(request):
         if not result:
             return 0
         (waitTime,) = result
-        print "idleCheck after q", waitTime
+        #print "idleCheck after q", waitTime
         return waitTime
     except pgError as e:
         print "\n", e, "\n"
@@ -248,6 +249,7 @@ def doSaveSessionData(request):
         return False
 
     try:
+        print "doSaveSessionData before INSERT"
         c = connect(host = h, user = u, password = p, database = d)
         cursor = c.cursor()
         cursor.execute('INSERT INTO charon_clients\
@@ -265,7 +267,7 @@ def doSaveSessionData(request):
                 WHERE client_id=%s AND hotspot_id=%s;', 
                 (entrypointID, userMAC, hotspotID),
             )
-            print "doSaveSessionData after UPDATE in charon_clients", userMAC, hotspotID, entrypointID
+            #print "doSaveSessionData after UPDATE in charon_clients", userMAC, hotspotID, entrypointID
             c.commit()
         except pgError as e: #couldnt INSERT or UPDATE charon_clients entry
             c.close()
@@ -323,9 +325,10 @@ def doPreauth():
     
     hotspotType = getHotspotId(request)
     varsOk = preauthGoodVars(request)
-    print "doPreauth", hotspotType, varsOk
-    if hotspotType is not None and varsOk:
+    print "doPreauth", hotspotType, varsOk, app.config.get('DB_HOST')
+    if hotspotType is not None and varsOk:        
         waitTime = idleCheck(request)
+
         if waitTime != False and waitTime:
             extradata = {'wait_time': waitTime}
             return render_template('preauth_idle.html', extradata = extradata)
@@ -432,10 +435,11 @@ def updateSessionLimits(request):
         c = connect(host = h, user = u, password = p, database = d)
         cursor = c.cursor()
         print "updateSessionLimits before q\n"
-        cursor.execute('UPDATE charon_limits\
-            SET auth_type=%s,idle_time=%s\
-            WHERE client_id=%s AND hotspot_id=%s;', 
-            (authType,idleTime,clientID,hotspotID),
+        cursor.execute('INSERT INTO charon_limits\
+            (client_id,hotspot_id,auth_type,idle_time)\
+            VALUES\
+            (%s,%s,%s,%s);', 
+            (clientID, hotspotID, authType, idleTime),
         )
         c.commit()
         print "updateSessionLimits after q\n"
@@ -445,12 +449,11 @@ def updateSessionLimits(request):
         print "\n",e,"\n"
         c.rollback()
         try:
-            cursor.execute('INSERT INTO charon_limits\
-                (client_id,hotspot_id,auth_type,idle_time)\
-                VALUES\
-                (%s,%s,%s,%s);', 
-                (clientID, hotspotID, authType, idleTime),
-            )
+            cursor.execute('UPDATE charon_limits\
+               SET auth_type=%s,idle_time=%s\
+               WHERE client_id=%s AND hotspot_id=%s;', 
+               (authType,idleTime,clientID,hotspotID),
+            )    
             c.commit()
             return True
         except pgError as e: #couldnt INSERT or UPDATE charon_limits entry
@@ -680,5 +683,5 @@ def doPostPostauth():
             return render_template('postpostauth.html', formdata = formData)
     return render_template('error.html')
 
-if __name__ == "__main__":
-    app.run()
+#if __name__ == "__main__":
+#    app.run()
