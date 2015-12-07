@@ -16,7 +16,7 @@ app.config.update(
 
 print app.config.get('PREAUTH_URL')
 """
-
+"""
 app.config.update(
     #PREAUTH_URL = preAuthUrl,
     #POSTAUTH_URL = postAuthUrl,
@@ -28,7 +28,8 @@ app.config.update(
     DB_PASS = 'ne9lahngahXah8n',
     DB_NAME = 'radius'
 )
-
+"""
+app.config.from_object('charon.settings')
 app.run(host='0.0.0.0',port=8080,debug = True)
 
 

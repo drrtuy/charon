@@ -1,10 +1,9 @@
-FROM flask-image
+FROM debian
 MAINTAINER drrtuy
-EXPOSE 8080 22
-RUN apt-get update && apt-get install -y --force-yes ssh vim-tiny
-RUN git clone https://github.com/drrtuy/charon /var/www/
+EXPOSE 80 443
+RUN apt-get update && apt-get install -y --force-yes python python-pip git libpq-dev python-dev vim-tiny
+RUN pip install flask
+RUN pip install psycopg2
+RUN pip install gunicorn
+ENTRYPOINT ["bash"]
 #ENTRYPOINT ["/usr/bin/python","/var/www/server.py"]
-
-#passwd
-#vim.tiny /etc/ssh/sshd.conf
-#service restart ssh
