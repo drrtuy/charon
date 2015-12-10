@@ -18,6 +18,13 @@ POST_POSTAUTH_VARS = POST_MAIN_VARS + ['auth_type', 'session_timeout', 'traffic_
 POST_PPOSTAUTH_VARS = POST_MAIN_VARS
 FREERAD_ADD_OP = r'+='
 
+"""
+The func produces a string from a dict-like Werkzeug API objects. The string contains all 
+IN
+    dict-like: 
+OUT
+    str
+"""
 
 """
 The func generates a password.

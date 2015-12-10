@@ -25,12 +25,23 @@ Method get a HotSpot id via Shopster API.
 IN
     request: Flask.Request
 OUT
-    None || one of the hotspot types
+    None || one of the hotspot types as a string
 """
 def getHotspotId(request):
+    result = None
+    if request.form:
+        app.logger.debug( "preauth getHotspotId() request POST data {0}".format(json_dumps(request.form)) )
+
     h_id = request.values.get('hotspot_id', None)    
-    if h_id == 'outage': return None
-    return 'mikrotik'
+    if h_id == 'outage':
+        app.logger.error("preauth getHotspotId() shopster is down")
+        return result
+    result = 'mikrotik'
+
+    if request.form:
+        app.logger.debug( "preauth getHotspotId() returns {}".format(result) )
+
+    return result 
 
 """
 Method checks whether client must wait for the idle timeout
@@ -45,19 +56,22 @@ def idleCheck(request):
     d = app.config.get('DB_NAME')
     u = app.config.get('DB_USER') 
     p = app.config.get('DB_PASS')
-    
+   
+    if request.form:
+        app.logger.debug( "preauth idleCheck() request POST data {0}".format(json_dumps(request.form)) )
+
     clientID = request.values.get('client_id', None)
     hotspotID = request.values.get('hotspot_id', None)
     entrypointID = request.values.get('entrypoint_id', None)
-    
+
+    result = False   
+ 
     if not clientID or not hotspotID:
-        return False
+        return result 
 
     try:        
         c = connect(host = h, user = u, password = p, database = d)
-        #print "idleCheck", c
         cursor = c.cursor()
-        #print "idleCheck before q", clientID, hotspotID
 
         cursor.execute('SELECT\
             (SELECT idle_time from charon_limits WHERE client_id=%s AND hotspot_id=%s)\
@@ -69,19 +83,21 @@ def idleCheck(request):
           ORDER BY t DESC LIMIT 1;',
             (clientID, hotspotID, clientID, hotspotID)
         )  
-        result = cursor.fetchone()
-        #c.close()
-        if not result:
-            return 0
-        (waitTime,) = result
-        #print "idleCheck after q", waitTime
+        row = cursor.fetchone()
+        if not row:
+            waitTime = 0
+        else:
+            (waitTime,) = row
+
+        app.logger.debug( "preauth idleCheck() next connection in {0} secs".format(waitTime) )
+
         return waitTime
     except pgError as e:
         app.logger.error("preauth idleCheck() " + str(e))
     finally:
         c.close()
 
-    return False
+    return result
 
 """
 Method checks POST variable list for completness and correctness.
@@ -91,10 +107,13 @@ OUT
     Bool
 """
 def preauthGoodVars(request):
+    if request.form:
+        app.logger.debug( "preauth preauthGoodVars() request POST data {0}".format(json_dumps(request.form)) )
     POSTVarsNames = POST_PREAUTH_VARS
     for POSTVarName in POSTVarsNames:
             POSTVarValue = request.values.get(POSTVarName, None)            
             if not POSTVarValue or not formatOk('preauthGoodVars', POSTVarName, POSTVarValue):
+                app.logger.warning( "preauth preauthGoodVars() input var '{0}' check failed".format(POSTVarName) )
                 return False
     return True
 
@@ -106,9 +125,13 @@ OUT
     Bool
 """
 #change userMAC to userID
-#change to UPSERT request
 def doSaveSessionData(request):
     
+    if request.form:
+        app.logger.debug( "preauth doSaveSessionData() request POST data {0}".format(json_dumps(request.form)) )
+    
+    result = False
+
     h = app.config.get('DB_HOST')
     d = app.config.get('DB_NAME')
     u = app.config.get('DB_USER') 
@@ -122,7 +145,7 @@ def doSaveSessionData(request):
     
     if not userName or not passWord or not hotspotID or not entrypointID\
  or not originalURL or not hotspotLoginURL:
-        return False
+        return result
 
     try:
         c = connect(host = h, user = u, password = p, database = d)
@@ -137,13 +160,12 @@ def doSaveSessionData(request):
             SELECT %s,%s,%s WHERE NOT EXISTS (SELECT 1 FROM charon_clients WHERE client_id=%s AND hotspot_id=%s);',
             (userMAC, hotspotID, entrypointID, userMAC, hotspotID)
         )
-
-        #print "doSaveSessionData after INSERT into charon_clients", userMAC, hotspotID, entrypointID
+        
         c.commit()
     except pgError as e:
         app.logger.error("preauth doSaveSessionData()" + str(e))
         c.close()
-        return False
+        return result
         
     try:
         cursor.execute('UPDATE charon_authentication\
@@ -171,13 +193,16 @@ def doSaveSessionData(request):
             (originalURL, hotspotLoginURL, userMAC, hotspotID, userMAC, hotspotID)
         )
         c.commit()
-        c.close()
-        return True
+        result = True
     except pgError as e:
         app.logger.error("preauth doSaveSessionData()" + str(e))
+    finally:
         c.close()
 
-    return False
+    if result:
+        app.logger.debug( "preauth doSaveSessionData() OK" )
+
+    return result
 
 
 """

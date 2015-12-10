@@ -42,10 +42,13 @@ def authenticated(request):
 
 def getJson(request): 
     j = request.get_json()
-    if isinstance(j, dict):
-        inputJSON = j
-    else:
-        inputJSON = json_loads(j)
+    try:
+        if isinstance(j, dict):
+            inputJSON = j
+        elif isinstance(j, str):
+            inputJSON = json_loads(j)
+    except TypeError:
+        app.logger.error("postauth getJson()" + str(e))
     return inputJSON
 
 """
@@ -240,12 +243,9 @@ OUT
 """
 @app.route("/v1/radius/subs/", methods=['POST'])
 def doPostauth():
-    #print "\n", request.data
     if not authenticated(request):
         return json.jsonify(auth = 'fail', result = 'fail')
 
-    #update RADIUS db after checking
-    #print "doPostauth"
     if postauthContentType(request) and postauthGoodVars(request)\
      and allowRadiusSubs(request) and updateSessionLimits(request): 
         return json.jsonify(auth = 'ok', result = 'ok')
