@@ -33,7 +33,7 @@ class CharonTestCase(unittest.TestCase):
             DB_HOST = 'z3_postgres_1',
             DB_USER = 'charon',
             DB_PASS = 'ne9lahngahXah8n',
-            DB_NAME = 'radius'
+            DB_NAME = 'radius',
         )
         charon.app.testing = True
         self.app = charon.app.test_client()

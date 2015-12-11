@@ -8,3 +8,5 @@ DB_HOST = 'z3_postgres_1'
 DB_USER = 'charon'
 DB_PASS = 'ne9lahngahXah8n'
 DB_NAME = 'radius'
+from logging import DEBUG as LOG_LEV_DEBUG
+APP_LOG_LEVEL = LOG_LEV_DEBUG

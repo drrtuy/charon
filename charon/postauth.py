@@ -29,27 +29,40 @@ IN
 OUT
     Bool
 """
-#fix it use control word Basic
-def authenticated(request):    
+#FIX add Basic
+def authenticated(request):
+
     a = request.headers.get('Authorization', None)
+    app.logger.debug( "postauth authenticated() Authorization HTTP header '{0}'".format(a)) 
+
+    result = False
+         
     if a is not None:
         secret = app.config.get('SHOPSTER_SECRET')
         today = str(date.today().day)
         expectedHash = sha256(secret.join(today)).hexdigest()
         if expectedHash == a:
-            return True
-    return False
+            result = True
+
+    app.logger.debug( "postauth authenticated() returns '{0}'".format(result))
+
+    return result
 
 def getJson(request): 
     j = request.get_json()
-    try:
-        if isinstance(j, dict):
-            inputJSON = j
-        elif isinstance(j, str):
-            inputJSON = json_loads(j)
-    except TypeError:
-        app.logger.error("postauth getJson()" + str(e))
-    return inputJSON
+
+    #app.logger.debug("postauth getJson() json '{0}'".format(j))
+
+    jsonAsDict = {}
+
+    if isinstance(j, dict):
+        jsonAsDict = j
+    else:
+        jsonAsDict = json_loads(j)
+
+    #app.logger.debug("postauth getJson() returns '{0}'".format(jsonAsDict))
+
+    return jsonAsDict
 
 """
 The func returns client MAC as username.
@@ -93,6 +106,11 @@ def updateSessionLimits(request):
     d = app.config.get('DB_NAME')
     u = app.config.get('DB_USER') 
     p = app.config.get('DB_PASS')
+
+    result = False
+    inputJSON = getJson(request)
+    app.logger.debug( "postauth updateSessionLimits() request json '{0}'".format(json_dumps(inputJSON)) )
+
     clientID = extractUserName(request)
     idleTime = extractIdleTime(request)
     authType = extractAuthType(request)
@@ -100,11 +118,11 @@ def updateSessionLimits(request):
     sessionLimit = extractSessionLimit(request)
     traffLimit = extractTraffLimit(request)
 
-    #print "updateSessionLimits", clientID, idleTime, authType, hotspotID, sessionLimit
 
     if not clientID or not idleTime or not authType or not hotspotID\
  or not sessionLimit or not traffLimit:
-        return False
+        app.logger.debug( "postauth updateSessionLimits() returns '{0}'".format(result) )
+        return result
 
     try:
         c = connect(host = h, user = u, password = p, database = d)
@@ -121,14 +139,15 @@ def updateSessionLimits(request):
  clientID, hotspotID)
         )
         c.commit()
-        #print "updateSessionLimits after q\n"
         c.close()
-        return True
+        result = True
     except pgError as e:
         app.logger.error("postauth updateSessionLimits()" + str(e))
         c.close()
 
-    return False
+    app.logger.debug( "postauth updateSessionLimits() returns '{0}'".format(result) )
+
+    return result
 
 """
 The func inserts user data into RADIUS database.
@@ -143,16 +162,21 @@ def allowRadiusSubs(request):
     d = app.config.get('DB_NAME')
     u = app.config.get('DB_USER') 
     p = app.config.get('DB_PASS')
+
+    result = False
+    inputJSON = getJson(request)
+    app.logger.debug( "postauth allowRadiusSubs() request json '{0}'".format(json_dumps(inputJSON)) )
+
     userMAC = userName = extractUserName(request)
     passWord = genPass()
     sessionTimeout = extractSessionLimit(request)
     traffLimit = extractTraffLimit(request)
 
     if not userName or not passWord or not sessionTimeout or not traffLimit:
-        return False
+        app.logger.debug( "postauth postauthGoodVars() returns '{0}'".format(result) )
+        return result
 
-    try:
-        #print "allowRadiusSubs before q", userName, passWord, sessionTimeout, traffLimit
+    try:        
         c = connect(host = h, user = u, password = p, database = d)
         cursor = c.cursor()
 
@@ -191,13 +215,14 @@ def allowRadiusSubs(request):
 
         c.commit()
         c.close()
-        #print "allowRadiusSubs after q"
-        return True
+
+        result = True
     except pgError as e:
         app.logger.error("postauth nallowRadiusSubs()" + str(e))
         c.close()
 
-    return False
+    app.logger.debug( "postauth allowRadiusSubs() returns '{0}'".format(result) )
+    return result
 
 """
 Method checks request content type.
@@ -207,6 +232,7 @@ OUT
     Bool
 """
 def postauthContentType(request):
+    app.logger.debug("postauth postauthContentType() returns '{0}'".format(request.content_type))
     return request.content_type == 'application/json'
     
 
@@ -219,13 +245,21 @@ OUT
 """
 def postauthGoodVars(request):
     POSTVarsNames = POST_POSTAUTH_VARS
+    result = True
+
     inputJSON = getJson(request)
+
+    app.logger.debug( "postauth postauthGoodVars() request json '{0}'".format(json_dumps(inputJSON)) )
+
     for POSTVarName in POSTVarsNames:
         POSTVarValue = inputJSON.get(POSTVarName, None)
-        #print POSTVarName, POSTVarValue
         if not POSTVarValue or not formatOk('postauthGoodVars', POSTVarName, POSTVarValue):
-            return False
-    return True
+            result = False
+            break
+
+    app.logger.debug( "postauth postauthGoodVars() returns '{0}'".format(result) )
+
+    return result
 
 """
 Func validates its input POST vars and inserts data for RADIUS subsystem in a database.
@@ -243,6 +277,7 @@ OUT
 """
 @app.route("/v1/radius/subs/", methods=['POST'])
 def doPostauth():
+
     if not authenticated(request):
         return json.jsonify(auth = 'fail', result = 'fail')
 

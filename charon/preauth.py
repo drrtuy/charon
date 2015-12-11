@@ -67,6 +67,7 @@ def idleCheck(request):
     result = False   
  
     if not clientID or not hotspotID:
+        app.logger.debug( "preauth idleCheck() returns {0}".format(result) )
         return result 
 
     try:        
@@ -89,13 +90,15 @@ def idleCheck(request):
         else:
             (waitTime,) = row
 
-        app.logger.debug( "preauth idleCheck() next connection in {0} secs".format(waitTime) )
+        #app.logger.debug( "preauth idleCheck() returns {0}".format(waitTime) )    
 
-        return waitTime
+        result = waitTime
     except pgError as e:
         app.logger.error("preauth idleCheck() " + str(e))
     finally:
         c.close()
+
+    app.logger.debug( "preauth idleCheck() returns {0}".format(result) )
 
     return result
 
@@ -107,6 +110,9 @@ OUT
     Bool
 """
 def preauthGoodVars(request):
+
+    result = True
+
     if request.form:
         app.logger.debug( "preauth preauthGoodVars() request POST data {0}".format(json_dumps(request.form)) )
     POSTVarsNames = POST_PREAUTH_VARS
@@ -114,8 +120,11 @@ def preauthGoodVars(request):
             POSTVarValue = request.values.get(POSTVarName, None)            
             if not POSTVarValue or not formatOk('preauthGoodVars', POSTVarName, POSTVarValue):
                 app.logger.warning( "preauth preauthGoodVars() input var '{0}' check failed".format(POSTVarName) )
-                return False
-    return True
+                result = False
+                return result
+
+    app.logger.debug( "preauth preauthGoodVars() returns {0}".format(result) )
+    return result
 
 """
 Method add/updates User model for later usage in postpostauth stage.
@@ -127,8 +136,7 @@ OUT
 #change userMAC to userID
 def doSaveSessionData(request):
     
-    if request.form:
-        app.logger.debug( "preauth doSaveSessionData() request POST data {0}".format(json_dumps(request.form)) )
+    app.logger.debug( "preauth doSaveSessionData() request POST data {0}".format(json_dumps(request.form)) )
     
     result = False
 
@@ -199,8 +207,7 @@ def doSaveSessionData(request):
     finally:
         c.close()
 
-    if result:
-        app.logger.debug( "preauth doSaveSessionData() OK" )
+    app.logger.debug( "preauth doSaveSessionData() returns '{0}'".format(result) )
 
     return result
 
@@ -218,8 +225,10 @@ OUT
 """
 @app.route("/preauth/", methods=['POST'])
 def doPreauth():
-    POSTVarsNames = POST_PREAUTH_VARS
-    
+    POSTVarsNames = POST_PREAUTH_VARS    
+
+    result = None
+
     hotspotType = getHotspotId(request)
     varsOk = preauthGoodVars(request)    
     if hotspotType is not None and varsOk:        
@@ -227,16 +236,20 @@ def doPreauth():
         
         if waitTime != False and waitTime:
             extradata = {'wait_time': waitTime}
-            return render_template('preauth_idle.html', extradata = extradata)
-        if not doSaveSessionData(request):
-            return render_template('error.html')
+            result = render_template('preauth_idle.html', extradata = extradata)
+            return result
+        if not doSaveSessionData(request):    
+            result = render_template('error.html') 
+            return result
         extradata = {}
         for POSTVarsName in POSTVarsNames:
             extradata[POSTVarsName] = request.values.get(POSTVarsName)        
-        a = render_template('preauth.html', extradata = extradata, url = app.config.get('SHOPSTER_URL'))
-        return a
+        result = render_template('preauth.html', extradata = extradata, url = app.config.get('SHOPSTER_URL'))
+        return result
     elif varsOk:                                #shopster system is down
-        return render_template('shopster_outage.html')
+        result = render_template('shopster_outage.html')
+        return result
     
-    return render_template('error.html')
+    result = render_template('error.html')
+    return result
 

@@ -66,7 +66,7 @@ def formatOk(fname, name, value):
     }
 
     if fname == 'preauthGoodVars':
-        if name == 'hotspot_id' and value == 'outage': return True    #for unit testing 
+        if name == 'hotspot_id' and value == 'outage': return True    #for unit tests
         if regex_search( preauthRegexps.get(name, EMPTY_REGEXP), value ):    
             return True
     elif fname == 'postauthGoodVars':

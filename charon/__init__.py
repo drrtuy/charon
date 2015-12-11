@@ -5,9 +5,9 @@ from charon import views
 
 @app.before_first_request
 def setup_logging():
-    if not app.debug:
+    if not app.testing:
         import logging
         Handler = logging.StreamHandler()
         Handler.setFormatter( logging.Formatter('%(asctime)s:pid %(process)d:thread %(thread)d: %(message)s') )
         app.logger.addHandler(Handler)
-        app.logger.setLevel(logging.DEBUG) #set logg level using external config
+        app.logger.setLevel( app.config.get('APP_LOG_LEVEL') ) #set logg level using external config

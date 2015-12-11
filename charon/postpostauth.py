@@ -37,12 +37,14 @@ def getFormData(request):
     
     clientID = request.values.get('client_id', None)
     hotspotID = request.values.get('hotspot_id', None)
-    #entrypointID = request.values.get('entrypoint_id', None)
+
+    result = None
+
+    app.logger.debug( "postpostauth getFormData() request POST data {0}".format(json_dumps(request.form)) )
     
     if not clientID or not hotspotID:
-        return None
-    
-    result = {}
+        app.logger.debug( "postpostauth getFormData() returns {0}".format(result) )
+        return result
 
     try:
         c = connect(host = h, user = u, password = p, database = d)
@@ -59,15 +61,18 @@ def getFormData(request):
         if not row:
             c.close()
             return None
+        result = {}
+        #FIX takes values from a row using table structure
         (result['username'], result['password'],\
         result['origin_url'], result['hotspot_login_url']) \
-        = row
+        = row 
         c.close()
-        return result
     except pgError as e:
         app.logger.error("postpostauth getFormData()" + str(e))
 
-    return None
+    app.logger.debug( "postpostauth getFormData() returns {0}".format(json_dumps(result)) )
+
+    return result
 
 """
 Method checks POST variable list for completness and correctness.
@@ -77,12 +82,19 @@ OUT
     Bool
 """
 def ppostauthGoodVars(request):
+    result = True
+    app.logger.debug( "postpostauth ppostauthGoodVars() request POST data {0}".format(json_dumps(request.form)) )
+
     POSTVarsNames = POST_PPOSTAUTH_VARS
     for POSTVarName in POSTVarsNames:
             POSTVarValue = request.values.get(POSTVarName, None)            
             if not POSTVarValue or not formatOk('ppostauthGoodVars', POSTVarName, POSTVarValue):
-                return False
-    return True
+                app.logger.warning( "postpostauth ppostauthGoodVars() input var '{0}' check failed".format(POSTVarName) )
+                result = False
+                break
+
+    app.logger.debug( "postpostauth ppostauthGoodVars() returns {0}".format(result) )
+    return result
 
 """
 Method checks variable for correctness in a particular function.
@@ -95,10 +107,8 @@ OUT
 """
 @app.route("/postpostauth/", methods=['POST'])
 def doPostPostauth():
-    #print "doPostPostauth", app.config.get('SHOPSTER_URL')
     if ppostauthGoodVars(request):
         formData = getFormData(request)
-        #print "doPostPostauth", formData
         if formData is not None:            
             return render_template('postpostauth.html', formdata = formData)
     return render_template('error.html')
