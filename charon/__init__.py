@@ -10,4 +10,5 @@ def setup_logging():
         Handler = logging.StreamHandler()
         Handler.setFormatter( logging.Formatter('%(asctime)s:pid %(process)d:thread %(thread)d: %(message)s') )
         app.logger.addHandler(Handler)
-        app.logger.setLevel( app.config.get('APP_LOG_LEVEL') ) #set logg level using external config
+        logLevel = int(app.config.get('APP_LOG_LEVEL'))
+        app.logger.setLevel( logLevel ) #set logg level using external config

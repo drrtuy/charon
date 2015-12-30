@@ -14,7 +14,7 @@ EMPTY_REGEXP = r'^$'
 ANY_REGEXP = r'^.*$'
 POST_MAIN_VARS = ['client_id', 'hotspot_id', 'entrypoint_id']
 POST_PREAUTH_VARS = POST_MAIN_VARS + ['hotspot_login_url']
-POST_POSTAUTH_VARS = POST_MAIN_VARS + ['auth_type', 'session_timeout', 'traffic_limit', 'next_conn_in']
+POST_POSTAUTH_VARS = POST_MAIN_VARS + ['session_hash', 'session_timeout', 'traffic_limit', 'next_conn_in']
 POST_PPOSTAUTH_VARS = POST_MAIN_VARS
 FREERAD_ADD_OP = r'+='
 

@@ -14,17 +14,10 @@ EMPTY_REGEXP = r'^$'
 ANY_REGEXP = r'^.*$'
 POST_MAIN_VARS = ['client_id', 'hotspot_id', 'entrypoint_id']
 POST_PREAUTH_VARS = POST_MAIN_VARS + ['hotspot_login_url']
-POST_POSTAUTH_VARS = POST_MAIN_VARS + ['auth_type', 'session_timeout', 'traffic_limit', 'next_conn_in']
+POST_POSTAUTH_VARS = POST_MAIN_VARS + ['session_hash', 'session_timeout', 'traffic_limit', 'next_conn_in']
 POST_PPOSTAUTH_VARS = POST_MAIN_VARS
 FREERAD_ADD_OP = r'+='
-
-"""
-The func produces a string from a dict-like Werkzeug API objects. The string contains all 
-IN
-    dict-like: 
-OUT
-    str
-"""
+MB=1048576
 
 """
 The func generates a password.
@@ -57,7 +50,7 @@ def formatOk(fname, name, value):
         'traffic_limit': POSINT_REGEXP,
         'session_timeout': POSINT_REGEXP,
         'next_conn_in': POSINT_REGEXP,
-        'auth_type': r'.*'
+        'session_hash': r'.*'
     }
     ppostauthGoodVars = {
         'client_id': MAC_REGEXP,
@@ -67,14 +60,167 @@ def formatOk(fname, name, value):
 
     if fname == 'preauthGoodVars':
         if name == 'hotspot_id' and value == 'outage': return True    #for unit tests
-        if regex_search( preauthRegexps.get(name, EMPTY_REGEXP), value ):    
-            return True
+        try:
+            if regex_search( preauthRegexps.get(name, EMPTY_REGEXP), value ):    
+                return True
+        except TypeError as e:
+                print "name '{0}' value '{1}' type '{2}'".format(name, value, type(value) )
     elif fname == 'postauthGoodVars':
-        if regex_search( postauthRegexps.get(name, EMPTY_REGEXP), value ):    
-            return True
+        try:
+            if regex_search( postauthRegexps.get(name, EMPTY_REGEXP), str(value) ):
+                return True
+        except TypeError as e:
+            print "name '{0}' value '{1}' type '{2}'".format(name, value, type(value) )
     elif fname == 'ppostauthGoodVars':
-        if regex_search( ppostauthGoodVars.get(name, EMPTY_REGEXP), value ):    
-            return True    
+        try:
+            if regex_search( ppostauthGoodVars.get(name, EMPTY_REGEXP), value ):    
+                return True        
+        except TypeError as e:
+            print "name '{0}' value '{1}' type '{2}'".format(name, value, type(value) )
 
     return False
+
+
+def getJson(request): 
+    j = request.get_json()
+
+    #app.logger.debug("misc getJson() json '{0}'".format(j))
+
+    jsonAsDict = {}
+
+    if isinstance(j, dict):
+        jsonAsDict = j
+    else:
+        jsonAsDict = json_loads(j)
+
+    #app.logger.debug("misc getJson() returns '{0}'".format(jsonAsDict))
+
+    return jsonAsDict
+
+"""
+The func returns client MAC as username.
+IN
+    request: Flask.Request
+OUT
+    str
+"""
+def extractUserName(request):
+    return getJson(request).get('client_id', None)
+
+def extractSessionLimit(request):    
+    return getJson(request).get('session_timeout', None)
+
+def extractEntryPointID(request):    
+    return getJson(request).get('entrypoint_id', None)
+
+def extractTraffLimit(request):
+    tL = getJson(request).get('traffic_limit', None)
+    return int(tL) * MB
+
+def extractIdleTime(request):
+    return getJson(request).get('next_conn_in', None)
+
+def extractAuthType(request):
+    return getJson(request).get('session_hash', None)
+
+def extractHotspotID(request):
+    return getJson(request).get('hotspot_id', None)
+
+def extractClientID(request):
+    return getJson(request).get('client_id', None)
+
+"""
+Method checks request content type.
+IN
+    request: Flask.Request
+OUT
+    Bool
+"""
+def isJson(request):
+    result = request.content_type == 'application/json'
+    app.logger.debug("misc isJson() returns '{0}'".format(result))
+    return result
+
+"""
+Method checks whether client must wait for the idle timeout
+IN
+    request: Flask.Request
+OUT
+    int || False (in case of failure)
+"""
+def idleCheck(request):
+
+    h = app.config.get('DB_HOST')
+    d = app.config.get('DB_NAME')
+    u = app.config.get('DB_USER') 
+    p = app.config.get('DB_PASS')
+   
+    if request.form:
+        app.logger.debug( "misc idleCheck() request POST data {0}".format(json_dumps(request.form)) )
+
+    #print "idleCheck", request.form
+
+    if isJson(request):        
+        clientID = extractClientID(request)
+        hotspotID = extractHotspotID(request)
+        entrypointID = extractEntryPointID(request)
+        #print("\njson {0} {1} {2}".format(clientID, hotspotID, entrypointID) )
+    else:
+        clientID = request.values.get('client_id', None)
+        hotspotID = request.values.get('hotspot_id', None)
+        entrypointID = request.values.get('entrypoint_id', None)
+        #print("\nform {0} {1} {2}".format(clientID, hotspotID, entrypointID) )  
+
+    result = False   
+    
+    if not clientID or not hotspotID or not entrypointID:
+        app.logger.debug( "misc idleCheck() returns {0}".format(result) )
+        return result
+
+    try:        
+        c = connect(host = h, user = u, password = p, database = d)
+        cursor = c.cursor()
+
+        cursor.execute('SELECT\
+            (SELECT idle_time from charon_limits WHERE client_id=%s AND hotspot_id=%s)\
+             - \
+            round(extract(mins from now()-acctstoptime)*60 + extract(secs from now()-acctstoptime)) AS t\
+            FROM radacct\
+            WHERE \
+            username=%s AND\
+            acctstoptime > now() - \
+            make_interval(secs:=(SELECT idle_time from charon_limits WHERE client_id=%s AND hotspot_id=%s))\
+          ORDER BY t DESC LIMIT 1;',
+            (clientID, hotspotID,clientID, clientID, hotspotID)
+        )
+        """
+        print cursor.mogrify('SELECT\
+            (SELECT idle_time from charon_limits WHERE client_id=%s AND hotspot_id=%s)\
+             - \
+            round(extract(mins from now()-acctstoptime)*60 + extract(secs from now()-acctstoptime)) AS t\
+            FROM radacct\
+            WHERE \
+            username=%s AND\
+            acctstoptime > now() - \
+            make_interval(secs:=(SELECT idle_time from charon_limits WHERE client_id=%s AND hotspot_id=%s))\
+          ORDER BY t DESC LIMIT 1;',
+            (clientID, hotspotID,clientID, clientID, hotspotID)
+        ) 
+        """
+        row = cursor.fetchone()
+        #print "idleCheck row", row
+        if not row:
+            waitTime = 0
+        else:
+            (waitTime,) = row
+        #app.logger.debug( "misc idleCheck() returns {0}".format(waitTime) )    
+        result = waitTime
+    except pgError as e:
+        app.logger.error("misc idleCheck() " + str(e))
+    finally:
+        c.close()
+
+    app.logger.debug( "misc idleCheck() returns {0}".format(result) )
+
+    return result
 

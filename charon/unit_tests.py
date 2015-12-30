@@ -46,7 +46,7 @@ class CharonTestCase(unittest.TestCase):
     #craft a proper environment to make a proper json Request
     def test_postauth_allow_subs(self):
         clientMac = userName = 'AA:BB:CC:DD:EE:FF'
-        inputData = {'client_id': clientMac, 'hotspot_id': '40D00276F319', 'hotspot_id': '40D00276F319', 'traffic_limit':  '60', 'session_timeout':  '600', 'next_conn_in':   '3600', 'auth_type': 'splash'}
+        inputData = {'client_id': clientMac, 'hotspot_id': '40D00276F319', 'hotspot_id': '40D00276F319', 'traffic_limit':  '60', 'session_timeout':  '600', 'next_conn_in':   '3600', 'session_hash': 'splash'}
         #r = Request({})
         r = charon.app.test_request_context('/v1/radius/subs/', method='POST')
         r.headers = EnvironHeaders({'Content-Type': 'application/json'})

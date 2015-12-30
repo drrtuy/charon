@@ -14,11 +14,11 @@ EMPTY_REGEXP = r'^$'
 ANY_REGEXP = r'^.*$'
 POST_MAIN_VARS = ['client_id', 'hotspot_id', 'entrypoint_id']
 POST_PREAUTH_VARS = POST_MAIN_VARS + ['hotspot_login_url']
-POST_POSTAUTH_VARS = POST_MAIN_VARS + ['auth_type', 'session_timeout', 'traffic_limit', 'next_conn_in']
+POST_POSTAUTH_VARS = POST_MAIN_VARS + ['session_hash', 'session_timeout', 'traffic_limit', 'next_conn_in']
 POST_PPOSTAUTH_VARS = POST_MAIN_VARS
 FREERAD_ADD_OP = r'+='
 
-from misc import formatOk, genPass
+from misc import formatOk, idleCheck
 
 #########################postpostauth
 
@@ -49,8 +49,8 @@ def getFormData(request):
     try:
         c = connect(host = h, user = u, password = p, database = d)
         cursor = c.cursor()
-        cursor.execute( 'SELECT DISTINCT a.username, a.password, u.origin_url, u.hotspot_login_url\
-             FROM charon_authentication a, charon_urls u \
+        cursor.execute( 'SELECT DISTINCT a.username, a.password, u.origin_url, u.hotspot_login_url, l.session_hash\
+             FROM charon_authentication a, charon_urls u, charon_limits l \
              WHERE a.client_id = u.client_id \
              AND u.client_id = %s \
              AND a.hotspot_id = u.hotspot_id \
@@ -64,9 +64,19 @@ def getFormData(request):
         result = {}
         #FIX takes values from a row using table structure
         (result['username'], result['password'],\
-        result['origin_url'], result['hotspot_login_url']) \
+        result['origin_url'], result['hotspot_login_url'], result['session_hash']) \
         = row 
         c.close()
+    
+        #fast hack
+    
+        st =  '{0}?session_hash={1}&origin_url={2}'.format(\
+            app.config.get('POSTPOSTAUTH_URL'), result['session_hash'], result['origin_url']\
+        )
+        #st = 'http://ya.ru'
+        result['origin_url'] = st
+        app.logger.debug( "postpostauth getFormData() FAST HACK origin URL {0}".format(result['origin_url']) )
+
     except pgError as e:
         app.logger.error("postpostauth getFormData()" + str(e))
 
@@ -107,8 +117,14 @@ OUT
 """
 @app.route("/postpostauth/", methods=['POST'])
 def doPostPostauth():
-    if ppostauthGoodVars(request):
+    if ppostauthGoodVars(request):        
+        waitTime = idleCheck(request)
+        
+        if waitTime != False and waitTime:
+            extradata = {'wait_time': waitTime}
+            return render_template('postpostauth_idle.html', extradata = extradata)            
+        
         formData = getFormData(request)
-        if formData is not None:            
+        if formData != None and idleCheck(request) == 0:            
             return render_template('postpostauth.html', formdata = formData)
     return render_template('error.html')

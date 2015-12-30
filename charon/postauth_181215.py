@@ -3,10 +3,9 @@ from flask import request, render_template, abort, json
 from re import search as regex_search
 from requests import post
 from hashlib import sha256
-from datetime import datetime
+from datetime import date
 from psycopg2 import connect, Error as pgError
 from json import loads as json_loads, dumps as json_dumps
-from base64 import b64encode
 
 MAC_REGEXP = r'^([0-9a-fA-F][0-9a-fA-F][:-]){5}([0-9a-fA-F][0-9a-fA-F])$'
 SN_REGEXP = r'([0-9a-fA-F]){12}'
@@ -40,13 +39,11 @@ def authenticated(request):
     result = False
          
     if a is not None:
-        u, recvdHash = a.split()
+        u, recvdHash = a.split() 
         secret = app.config.get('SHOPSTER_SECRET')
-        day = datetime.now().strftime('%d')
-        salt = '{0}:{1}'.format(secret, day)
-        #today = str(date.today().day)
-        expectedHash = b64encode( sha256(salt).hexdigest() )
-        app.logger.debug( "postauth authenticated() received hash '{0}' expected hash '{1}'".format(recvdHash, expectedHash))
+        today = str(date.today().day)
+        expectedHash = sha256(secret.join(today)).hexdigest()
+        app.logger.debug( "postauth authenticated() received hash '{0}' expected hash '{1}'".format(recvdHash, expectedHash)
         if expectedHash == recvdHash:
             result = True
 

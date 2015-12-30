@@ -1,7 +1,7 @@
 #!/usr/bin/python
 import charon
 import unittest
-from datetime import date
+from datetime import date, datetime
 from hashlib import sha256
 from flask import Request
 from flask import request
@@ -9,6 +9,7 @@ from werkzeug import MultiDict, EnvironHeaders
 import psycopg2 as pg
 import json
 from os import environ
+from base64 import b64encode
 #from charon import *
 #from postauth import *
 #from ppauth import *
@@ -27,6 +28,7 @@ class CharonTestCase(unittest.TestCase):
 
     def setUp(self):
         #charon.app.config['TESTING'] = True
+        """
         charon.app.config.update(
             SHOPSTER_URL = environ.get('SHOPSTER_AUTH_URL'),
             SHOPSTER_SECRET = 'ech5haisho8Ohri',
@@ -35,6 +37,8 @@ class CharonTestCase(unittest.TestCase):
             DB_PASS = 'ne9lahngahXah8n',
             DB_NAME = 'radius',
         )
+        """
+        charon.app.config.from_object('charon.settings')
         charon.app.testing = True
         self.app = charon.app.test_client()
         self.dbConn = self.db_conn()
@@ -46,7 +50,7 @@ class CharonTestCase(unittest.TestCase):
     #craft a proper environment to make a proper json Request
     def test_postauth_allow_subs(self):
         clientMac = userName = 'AA:BB:CC:DD:EE:FF'
-        inputData = {'client_id': clientMac, 'hotspot_id': '40D00276F319', 'hotspot_id': '40D00276F319', 'traffic_limit':  '60', 'session_timeout':  '600', 'next_conn_in':   '3600', 'auth_type': 'splash'}
+        inputData = {'client_id': clientMac, 'hotspot_id': '40D00276F319', 'hotspot_id': '40D00276F319', 'traffic_limit':  '60', 'session_timeout':  '600', 'next_conn_in': '3600', 'session_hash': 'splash'}
         r = charon.app.test_request_context('/v1/radius/subs/', method='POST',\
          content_type = 'application/json', data = json.dumps(inputData))
         result = charon.views.allowRadiusSubs(r.request)
@@ -72,7 +76,7 @@ class CharonTestCase(unittest.TestCase):
     """
     def test_postauth_goodvarsets(self):
         clientMac = 'AA:BB:CC:DD:EE:FF'
-        inputData = {'client_id': clientMac, 'hotspot_id': '40D00276F319', 'entrypoint_id': '40D00276F319', 'traffic_limit':  '60', 'session_timeout':  '600', 'next_conn_in':   '3600', 'auth_type': 'splash'}
+        inputData = {'client_id': clientMac, 'hotspot_id': '40D00276F319', 'entrypoint_id': '40D00276F319', 'traffic_limit':  '60', 'session_timeout':  '600', 'next_conn_in':   '3600', 'session_hash': 'splash'}
         f = json.dumps(inputData)
         fixture = [f]
         h = {'Authorization': self.get_hash()}
@@ -146,7 +150,7 @@ content_type = 'application/json')
         f6 = {'client_id': 'AA:BB:CC:DD:EE:FF', 'hotspot_id': '40D00276F319', 'hotspot_id': '40D00276F319', 'traffic_limit': '-1', 'session_timeout': '60' }
         f7 = {'client_id': 'AA:BB:CC:DD:EE:FF', 'hotspot_id': '40D00276F319', 'hotspot_id': '40D00276F319', 'traffic_limit': '60', 'session_timeout': '-1' }
         f8 = {'client_id': 'AA:BB:CC:DD:EE:FF', 'hotspot_id': '40D00276F319', 'hotspot_id': '40D00276F319', 'traffic_limit':  '60', 'session_timeout':  '60', 'next_conn_in': '-1'}
-        f9 = {'client_id': 'AA:BB:CC:DD:EE:FF', 'hotspot_id': '40D00276F319', 'hotspot_id': '40D00276F319', 'traffic_limit':  '60', 'session_timeout':  '60', 'next_conn_in':   '3600', 'auth_type': '-1'}
+        f9 = {'client_id': 'AA:BB:CC:DD:EE:FF', 'hotspot_id': '40D00276F319', 'hotspot_id': '40D00276F319', 'traffic_limit':  '60', 'session_timeout':  '60', 'next_conn_in':   '3600', 'session_hash': '-1'}
 
         fixture = [f1, f2, f3, f4, f5,f6,f7,f8,f9]
         for f in fixture:
@@ -158,22 +162,25 @@ content_type = 'application/json')
 
     def get_hash(self):
         secret = charon.app.config.get('SHOPSTER_SECRET')
-        today = str(date.today().day)
-        expectedHash = sha256(secret.join(today)).hexdigest()
+        day = datetime.now().strftime('%d')
+        salt = '{0}:{1}'.format(secret, day)
+        #today = str(date.today().day)
+        expectedHash = b64encode( sha256(salt).hexdigest() )
         return expectedHash
 
     def test_authenticated(self):
-        h = {'Authorization': self.get_hash()}
+        secret = 'Basic {0}'.format(self.get_hash())
+        h = {'Authorization': secret}
         r = Request({})
         r.headers = MultiDict(h)
         self.assertTrue(charon.views.authenticated(r))
 
     def test_postauth_badauth(self):
         clientMac = 'AA:BB:CC:DD:EE:FF'
-        inputData = {'client_id': clientMac, 'hotspot_id': '40D00276F319', 'entrypoint_id': '40D00276F319', 'traffic_limit':  '60', 'session_timeout':  '600', 'next_conn_in':   '3600', 'auth_type': 'splash'}
+        inputData = {'client_id': clientMac, 'hotspot_id': '40D00276F319', 'entrypoint_id': '40D00276F319', 'traffic_limit':  '60', 'session_timeout':  '600', 'next_conn_in':   '3600', 'session_hash': 'splash'}
         f = json.dumps(inputData)
         fixture = [f]
-        h = {'Authorization': self.get_hash().join('123')}
+        h = {'Authorization': '123 {0}1'.format(self.get_hash())}
         for f in fixture:
             rv = self.app.post(path='/v1/radius/subs/', data = f, headers = h,\
 content_type = 'application/json')
@@ -184,7 +191,7 @@ content_type = 'application/json')
 
     def test_postauth_noauth(self):
         clientMac = 'AA:BB:CC:DD:EE:FF'
-        inputData = {'client_id': clientMac, 'hotspot_id': '40D00276F319', 'entrypoint_id': '40D00276F319', 'traffic_limit':  '60', 'session_timeout':  '600', 'next_conn_in':   '3600', 'auth_type': 'splash'}
+        inputData = {'client_id': clientMac, 'hotspot_id': '40D00276F319', 'entrypoint_id': '40D00276F319', 'traffic_limit':  '60', 'session_timeout':  '600', 'next_conn_in':   '3600', 'session_hash': 'splash'}
         f = json.dumps(inputData)
         fixture = [f]
         for fi in fixture:
@@ -197,29 +204,74 @@ content_type = 'application/json')
 
     def test_postauth_formatOk(self):
         clientMac = 'AA:BB:CC:DD:EE:FF'
-        inputData = {'client_id': clientMac, 'hotspot_id': '40D00276F319', 'hotspot_id': '40D00276F319', 'entrypoint_id': '40D00276F319', 'traffic_limit':  '60', 'session_timeout':  '600', 'next_conn_in':   '3600', 'auth_type': 'splash'}
+        inputData = {'client_id': clientMac, 'hotspot_id': '40D00276F319', 'hotspot_id': '40D00276F319', 'entrypoint_id': '40D00276F319', 'traffic_limit':  '60', 'session_timeout':  '600', 'next_conn_in':   '3600', 'session_hash': 'splash'}
         for k,v in inputData.iteritems():
             self.assertTrue(charon.views.formatOk('postauthGoodVars', k, v))
         
     def test_postauth_goodvarsets(self):
         clientMac = 'AA:BB:CC:DD:EE:EE'
-        inputData = {'client_id': clientMac, 'hotspot_id': '40D00276F319', 'entrypoint_id': '40D00276F319', 'traffic_limit':  '60', 'session_timeout':  '600', 'next_conn_in':   '3600', 'auth_type': 'splash'}
+        inputData = {'client_id': clientMac, 'hotspot_id': '40D00276F319', 'entrypoint_id': '40D00276F319', 'traffic_limit':  '60', 'session_timeout':  '600', 'next_conn_in':   '3600', 'session_hash': 'splash'}
+        fixtures = json.dumps(inputData)      
+        secret = 'Basic {0}'.format(self.get_hash())
+        h = {'Authorization': secret}  
+        #h = {'Authorization': self.get_hash()}
+        preauth_fixtures = {'client_id': clientMac, 'hotspot_id': '40D00276F319', 'entrypoint_id': '40D00276F319', 'original_url': 'www.sex.com', 'hotspot_login_url': 'http://hotspot.zerothree.su/login'}
+
+        with self.dbConn.cursor() as cursor:            
+            with self.app as c:
+                c.post(path='/preauth/', data = preauth_fixtures)
+                rv = c.post(path='/v1/radius/subs/', data = fixtures, headers = h,
+    content_type = 'application/json')
+                self.assertEqual(rv.status_code, 200)
+                self.assertIn('"auth": "ok"', rv.data)
+                self.assertIn('"result": "ok"', rv.data)
+                        
+            #cursor.execute("DELETE FROM radacct WHERE acctuniqueid='79e685ac1041c847cb31bfe81390beee';")         
+            cursor.execute("DELETE FROM charon_clients WHERE client_id ='AA:BB:CC:DD:EE:EE'  AND hotspot_id='40D00276F319';")
+            self.dbConn.commit()
+    """
+    def test_postauth_failidle(self):
+        clientMac = 'AA:BB:CC:DD:EE:ED'
+        inputData = {'client_id': clientMac, 'hotspot_id': '40D00276F319', 'entrypoint_id': '40D00276F319', 'traffic_limit':  '60', 'session_timeout':  '600', 'next_conn_in':   '3600', 'session_hash': 'splash'}
         fixtures = json.dumps(inputData)        
         h = {'Authorization': self.get_hash()}
         preauth_fixtures = {'client_id': clientMac, 'hotspot_id': '40D00276F319', 'entrypoint_id': '40D00276F319', 'original_url': 'www.sex.com', 'hotspot_login_url': 'http://hotspot.zerothree.su/login'}
-
-        with self.app as c:
-            c.post(path='/preauth/', data = preauth_fixtures)
-            rv = c.post(path='/v1/radius/subs/', data = fixtures, headers = h,
-content_type = 'application/json')
-            self.assertEqual(rv.status_code, 200)
-            self.assertIn('"auth": "ok"', rv.data)
-            self.assertIn('"result": "ok"', rv.data)
         
-        cursor = self.dbConn.cursor()
-        cursor.execute("DELETE FROM charon_clients WHERE client_id ='AA:BB:CC:DD:EE:EE'  AND hotspot_id='40D00276F319';")
-        self.dbConn.commit()
-        cursor.close()
+        with self.dbConn.cursor() as cursor:         
+            with self.app as c:
+                c.post(path='/preauth/', data = preauth_fixtures)
+                cursor = self.dbConn.cursor()                
+
+                cursor.execute("DELETE FROM radacct WHERE acctuniqueid='79e685ac1041c847cb31bfe81390beeq';")
+                self.dbConn.commit()
+
+                cursor.execute("INSERT INTO radacct(\
+                            acctsessionid, acctuniqueid, username, groupname, \
+                            realm, nasipaddress, nasportid, nasporttype, acctstarttime, acctupdatetime, \
+                            acctstoptime, acctinterval, acctsessiontime, acctauthentic, connectinfo_start, \
+                            connectinfo_stop, acctinputoctets, acctoutputoctets, calledstationid, \
+                            callingstationid, acctterminatecause, servicetype, framedprotocol, \
+                            framedipaddress) VALUES\
+                    ('8090000f','79e685ac1041c847cb31bfe81390beeq','AA:BB:CC:DD:EE:ED',\
+                    ' ',' ','83.219.159.140','wlan1','Wireless-802.11','2015-12-11 12:53:14+00','2015-12-11 12:54:14+00',\
+                    now(),'0',60,' ',' ',' ',16009,20093,'40D00276F319','AA:BB:CC:DD:EE:ED',\
+                    'Session-Timeout',' ',' ','10.128.15.8');"\
+                )
+                self.dbConn.commit()
+                rv = c.post(path='/v1/radius/subs/', data = fixtures, headers = h,
+    content_type = 'application/json')
+
+                from time import sleep                
+                sleep(300)
+                cursor.execute("DELETE FROM charon_clients WHERE client_id ='AA:BB:CC:DD:EE:ED'  AND hotspot_id='40D00276F319';")
+                cursor.execute("DELETE FROM radacct WHERE acctuniqueid='79e685ac1041c847cb31bfe81390beeq';")
+                self.dbConn.commit()
+
+                self.assertEqual(rv.status_code, 200)
+                self.assertIn('"auth": "ok"', rv.data)
+                self.assertIn('"result": "fail"', rv.data)            
+    """
+  
 
     #postpostauth
 
@@ -249,9 +301,11 @@ content_type = 'application/json')
         clientMac = 'AA:BB:CC:DD:EE:CE'                
         fixtures = {'client_id': clientMac, 'hotspot_id': '40D00276F319', 'entrypoint_id': '40D00276F319'}
         preauth_fixtures = {'client_id': clientMac, 'hotspot_id': '40D00276F319', 'entrypoint_id': '40D00276F319', 'original_url': 'www.sex.com', 'hotspot_login_url': 'http://hotspot.zerothree.su/login'}
-        inputData = {'client_id': clientMac, 'hotspot_id': '40D00276F319', 'entrypoint_id': '40D00276F319', 'traffic_limit':  '60', 'session_timeout':  '600', 'next_conn_in':   '3600', 'auth_type': 'splash'}
+        inputData = {'client_id': clientMac, 'hotspot_id': '40D00276F319', 'entrypoint_id': '40D00276F319', 'traffic_limit':  '60', 'session_timeout':  '600', 'next_conn_in':   '3600', 'session_hash': 'splash'}
         postauth_fixtures = json.dumps(inputData)
-        postauth_h = {'Authorization': self.get_hash()}
+        secret = 'Basic {0}'.format(self.get_hash())
+        postauth_h = {'Authorization': secret}
+        #postauth_h = {'Authorization': self.get_hash()}
         with self.app as c:
             c.post(path='/preauth/', data = preauth_fixtures)
             c.post(path='/v1/radius/subs/', data = postauth_fixtures,
@@ -259,6 +313,7 @@ content_type = 'application/json')
             rv = c.post(path='/postpostauth/', data = fixtures)
             self.assertEqual(rv.status_code, 200)
             self.assertIn('document.login.submit()', rv.data)
+
 
         cursor = self.dbConn.cursor()
         cursor.execute("DELETE FROM charon_clients WHERE client_id ='AA:BB:CC:DD:EE:CE'  AND hotspot_id='40D00276F319';")

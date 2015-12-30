@@ -7,7 +7,7 @@ from datetime import date
 from psycopg2 import connect, Error as pgError
 from json import loads as json_loads, dumps as json_dumps
 
-from misc import formatOk, genPass
+from misc import formatOk, genPass, idleCheck
 
 MAC_REGEXP = r'^([0-9a-fA-F][0-9a-fA-F][:-]){5}([0-9a-fA-F][0-9a-fA-F])$'
 SN_REGEXP = r'([0-9a-fA-F]){12}'
@@ -16,7 +16,7 @@ EMPTY_REGEXP = r'^$'
 ANY_REGEXP = r'^.*$'
 POST_MAIN_VARS = ['client_id', 'hotspot_id', 'entrypoint_id']
 POST_PREAUTH_VARS = POST_MAIN_VARS + ['hotspot_login_url']
-POST_POSTAUTH_VARS = POST_MAIN_VARS + ['auth_type', 'session_timeout', 'traffic_limit', 'next_conn_in']
+POST_POSTAUTH_VARS = POST_MAIN_VARS + ['session_hash', 'session_timeout', 'traffic_limit', 'next_conn_in']
 POST_PPOSTAUTH_VARS = POST_MAIN_VARS
 FREERAD_ADD_OP = r'+='
 
@@ -42,65 +42,6 @@ def getHotspotId(request):
         app.logger.debug( "preauth getHotspotId() returns {}".format(result) )
 
     return result 
-
-"""
-Method checks whether client must wait for the idle timeout
-IN
-    request: Flask.Request
-OUT
-    int || False (in case of failure)
-"""
-def idleCheck(request):
-
-    h = app.config.get('DB_HOST')
-    d = app.config.get('DB_NAME')
-    u = app.config.get('DB_USER') 
-    p = app.config.get('DB_PASS')
-   
-    if request.form:
-        app.logger.debug( "preauth idleCheck() request POST data {0}".format(json_dumps(request.form)) )
-
-    clientID = request.values.get('client_id', None)
-    hotspotID = request.values.get('hotspot_id', None)
-    entrypointID = request.values.get('entrypoint_id', None)
-
-    result = False   
- 
-    if not clientID or not hotspotID:
-        app.logger.debug( "preauth idleCheck() returns {0}".format(result) )
-        return result 
-
-    try:        
-        c = connect(host = h, user = u, password = p, database = d)
-        cursor = c.cursor()
-
-        cursor.execute('SELECT\
-            (SELECT idle_time from charon_limits WHERE client_id=%s AND hotspot_id=%s)\
-             - \
-            round(extract(mins from now()-acctstoptime)*60 + extract(secs from now()-acctstoptime)) AS t\
-            FROM radacct\
-            WHERE acctstoptime > now() - \
-            make_interval(secs:=(SELECT idle_time from charon_limits WHERE client_id=%s AND hotspot_id=%s))\
-          ORDER BY t DESC LIMIT 1;',
-            (clientID, hotspotID, clientID, hotspotID)
-        )  
-        row = cursor.fetchone()
-        if not row:
-            waitTime = 0
-        else:
-            (waitTime,) = row
-
-        #app.logger.debug( "preauth idleCheck() returns {0}".format(waitTime) )    
-
-        result = waitTime
-    except pgError as e:
-        app.logger.error("preauth idleCheck() " + str(e))
-    finally:
-        c.close()
-
-    app.logger.debug( "preauth idleCheck() returns {0}".format(result) )
-
-    return result
 
 """
 Method checks POST variable list for completness and correctness.
@@ -151,6 +92,9 @@ def doSaveSessionData(request):
     hotspotLoginURL = request.values.get('hotspot_login_url', None) 
     passWord = genPass()
     
+    #fast hack
+    #originalURL = 'backup-2.getshopster.com:8875'
+
     if not userName or not passWord or not hotspotID or not entrypointID\
  or not originalURL or not hotspotLoginURL:
         return result

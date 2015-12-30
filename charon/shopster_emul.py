@@ -14,7 +14,7 @@ EMPTY_REGEXP = r'^$'
 ANY_REGEXP = r'^.*$'
 POST_MAIN_VARS = ['client_id', 'hotspot_id', 'entrypoint_id']
 POST_PREAUTH_VARS = POST_MAIN_VARS + ['hotspot_login_url']
-POST_POSTAUTH_VARS = POST_MAIN_VARS + ['auth_type', 'session_timeout', 'traffic_limit', 'next_conn_in']
+POST_POSTAUTH_VARS = POST_MAIN_VARS + ['session_hash', 'session_timeout', 'traffic_limit', 'next_conn_in']
 POST_PPOSTAUTH_VARS = POST_MAIN_VARS
 FREERAD_ADD_OP = r'+='
 
@@ -74,7 +74,7 @@ def doAllowUser(request):
     'traffic_limit':  '60',
     'session_timeout':  '3100',
     'next_conn_in':   '3600',
-    'auth_type': 'splash'
+    'session_hash': 'splash'
     }
     response = post('http://charon.zerothree.su:8082/v1/radius/subs/', #docker doesnt allow containers to connect to their own host's external ports
         headers = {'Authorization': get_hash()},

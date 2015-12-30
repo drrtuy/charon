@@ -8,9 +8,8 @@
 <form name="login" action="{{ formdata.hotspot_login_url }}" method="post" >
 <input type="hidden" name="dst" value="{{ formdata.origin_url }}" />
 <input type="hidden" name="popup" value="no" />
-Username :<input name="username" type="text" value="{{ formdata.username }}"/><br>
-Password :<input name="password" type="password" value="{{ formdata.password }}"/><br>
-<input type="submit" value="Login" />
+<input name="username" type="hidden" value="{{ formdata.username }}"/>
+<input name="password" type="hidden" value="{{ formdata.password }}"/>
 </form>
 
 <script language="JavaScript">
