@@ -40,7 +40,12 @@ def authenticated(request):
     result = False
          
     if a is not None:
-        u, recvdHash = a.split()
+        try:
+            u, recvdHash = a.split()
+        except ValueError:
+            app.logger.warning( "postauth authenticated() wrong header format")
+            result = False            
+            return result
         secret = app.config.get('SHOPSTER_SECRET')
         day = datetime.now().strftime('%d')
         salt = '{0}:{1}'.format(secret, day)

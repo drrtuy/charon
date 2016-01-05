@@ -68,9 +68,11 @@ def formatOk(fname, name, value):
     elif fname == 'postauthGoodVars':
         try:
             if regex_search( postauthRegexps.get(name, EMPTY_REGEXP), str(value) ):
-                return True
+                pass
+                #return True
         except TypeError as e:
             print "name '{0}' value '{1}' type '{2}'".format(name, value, type(value) )
+        return True #doesn't check variable format 
     elif fname == 'ppostauthGoodVars':
         try:
             if regex_search( ppostauthGoodVars.get(name, EMPTY_REGEXP), value ):    

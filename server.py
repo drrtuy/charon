@@ -1,34 +1,12 @@
 #!/usr/bin/python
 
+from werkzeug.contrib.profiler import ProfilerMiddleware
+
 from charon import app
 
-"""
-preAuthUrl = '/preauth/'
-apiUrl = '/api/v1/'
-postAuthUrl = apiUrl + 'subs/'
-postPostAuthUrl = '/postpostauth/'
+app.config['PROFILE'] = True
+app.wsgi_app = ProfilerMiddleware(app.wsgi_app, restrictions=[30])
 
-app.config.update(
-    PREAUTH_URL = preAuthUrl,
-    POSTAUTH_URL = postAuthUrl,
-    POSTPOSTAUTH_URL = postPostAuthUrl
-)
-
-print app.config.get('PREAUTH_URL')
-"""
-"""
-app.config.update(
-    #PREAUTH_URL = preAuthUrl,
-    #POSTAUTH_URL = postAuthUrl,
-    POSTPOSTAUTH_URL = 'http://charon.zerothree.su:8081/postpostauth/',
-    SHOPSTER_URL = 'http://shopster.zerothree.su:8082/', #shopster container
-    SHOPSTER_SECRET = 'ech5haisho8Ohri', 
-    DB_HOST = 'z3_postgres_1',
-    DB_USER = 'charon',
-    DB_PASS = 'ne9lahngahXah8n',
-    DB_NAME = 'radius'
-)
-"""
 app.config.from_object('charon.settings')
 app.run(host='0.0.0.0',port=8080,debug = True)
 
