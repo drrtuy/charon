@@ -1,11 +1,13 @@
 from charon import app
-from flask import request, render_template, abort, json
+from flask import request, render_template, abort, json, session
 from re import search as regex_search
 from requests import post
 from hashlib import sha256
 from datetime import date
 from psycopg2 import connect, Error as pgError
 from json import loads as json_loads, dumps as json_dumps
+from inspect import stack
+from model import *
 
 MAC_REGEXP = r'^([0-9a-fA-F][0-9a-fA-F][:-]){5}([0-9a-fA-F][0-9a-fA-F])$'
 SN_REGEXP = r'([0-9a-fA-F]){12}'
@@ -18,6 +20,7 @@ POST_POSTAUTH_VARS = POST_MAIN_VARS + ['session_hash', 'session_timeout', 'traff
 POST_PPOSTAUTH_VARS = POST_MAIN_VARS
 FREERAD_ADD_OP = r'+='
 MB=1048576
+DEB_PREFIX = 'misc'
 
 """
 The func generates a password.
@@ -62,9 +65,11 @@ def formatOk(fname, name, value):
         if name == 'hotspot_id' and value == 'outage': return True    #for unit tests
         try:
             if regex_search( preauthRegexps.get(name, EMPTY_REGEXP), value ):    
-                return True
+                pass
+                #return True
         except TypeError as e:
                 print "name '{0}' value '{1}' type '{2}'".format(name, value, type(value) )
+        return True        
     elif fname == 'postauthGoodVars':
         try:
             if regex_search( postauthRegexps.get(name, EMPTY_REGEXP), str(value) ):
@@ -115,9 +120,12 @@ def extractSessionLimit(request):
 def extractEntryPointID(request):    
     return getJson(request).get('entrypoint_id', None)
 
-def extractTraffLimit(request):
-    tL = getJson(request).get('traffic_limit', None)
-    return int(tL) * MB
+def extractTraffLimit(request):    
+    try: 
+        tL = getJson(request).get('traffic_limit', None)
+        return int(tL) * MB
+    except TypeError, ValueError:
+        return 0
 
 def extractIdleTime(request):
     return getJson(request).get('next_conn_in', None)
@@ -130,6 +138,73 @@ def extractHotspotID(request):
 
 def extractClientID(request):
     return getJson(request).get('client_id', None)
+
+def extractControllerPort(request):
+    return getJson(request).get('controller_port', None)
+
+def extractControllerAddr(request):
+    return getJson(request).get('controller_address', None)
+
+def extractControllerUser(request):
+    return getJson(request).get('controller_user', None)
+
+def extractControllerPass(request):
+    return getJson(request).get('controller_password', None)
+    
+def extractControllerVersion(request):
+    r = getJson(request).get('controller_version', None)
+    if r == None:
+        r = 'v4'
+    return r
+
+"""
+Model is a dict with fields: client_id, hotspot_id, entrypoint_id, original_url.
+Method tear down the request and returns dict with values for the model.
+IN
+    request: Flask.Request
+OUT
+    dict
+"""
+def getPreauthModel(request):
+
+    (u, u, u, currFuncName, u, u) = stack()[0]
+    app.logger.debug( '{0} {1}() request args {2}'.format(DEB_PREFIX, currFuncName, request.values.to_dict(flat = False) ) )
+
+    result = {}
+
+    POSTVarsNames = session.get('POSTVarsNames', [] )
+    hotspotType = session.get('hotspotType', None )
+
+    if request.method == 'POST' and hotspotType == 'mikrotik':
+        for POSTVarsName in POSTVarsNames:
+            result[POSTVarsName] = request.values.get(POSTVarsName)
+        result['original_url'] = request.values.get('original_url')
+    elif hotspotType == 'ubiquity':
+        result['client_id'] = request.args.get('id')
+        result['hotspot_id'] = request.args.get('ap')
+        result['entrypoint_id'] = result['hotspot_id']
+        result['original_url'] = request.args.get('url')
+        result['hotspot_login_url'] = result['original_url']
+    elif hotspotType == 'aruba':
+        result['client_id'] = request.args.get('mac')
+        result['hotspot_id'] = request.args.get('apname')
+        result['entrypoint_id'] = result['hotspot_id']
+        result['original_url'] = request.args.get('url')
+        result['hotspot_login_url'] = 'http://{0}/cgi-bin/login'.format( request.args.get('switchip') )
+    elif hotspotType == 'ruckus':
+        result = Ruckus()
+        result['client_id'] = request.args.get('client_mac')
+        result['hotspot_id'] = request.args.get('mac')
+        result['entrypoint_id'] = result['hotspot_id']
+        result['original_url'] = request.args.get('url')
+        result['hotspot_login_url'] = request.args.get('sip')
+        result['uip'] = request.args.get('uip')
+
+    app.logger.debug("misc getPreauthModel() returns {0}".format( json_dumps(result) ) )
+    
+    return result 
+
+getPreauthTemplateData = getPreauthModel
 
 """
 Method checks request content type.
@@ -225,4 +300,3 @@ def idleCheck(request):
     app.logger.debug( "misc idleCheck() returns {0}".format(result) )
 
     return result
-

@@ -21,6 +21,7 @@ FREERAD_ADD_OP = r'+='
 
 #from misc import formatOk, genPass, idleCheck, isJson
 from misc import *
+from ubiquity import isUbiquity, allowUbiquitySubs
 
 ########################postauth
 
@@ -84,11 +85,13 @@ def updateSessionLimits(request):
     sessionLimit = extractSessionLimit(request)
     traffLimit = extractTraffLimit(request)
 
-
-    if not clientID or not idleTime or not authType or not hotspotID\
- or not sessionLimit or not traffLimit:
+    if None in ( clientID, idleTime, authType, hotspotID, sessionLimit, traffLimit):
+        app.logger.debug( "postauth updateSessionLimits() client '{0}', idle {1}, authtype {2}, hotspot {3} TO {4} traff {5}".format(\
+            clientID, idleTime, authType, hotspotID, sessionLimit, traffLimit )
+        )
         app.logger.debug( "postauth updateSessionLimits() returns '{0}'".format(result) )
         return result
+
 
     try:
         c = connect(host = h, user = u, password = p, database = d)
@@ -138,8 +141,9 @@ def allowRadiusSubs(request):
     sessionTimeout = extractSessionLimit(request)
     traffLimit = extractTraffLimit(request)
 
-    if not userName or not passWord or not sessionTimeout or not traffLimit:
-        app.logger.debug( "postauth postauthGoodVars() returns '{0}'".format(result) )
+    if None in (userName, passWord, sessionTimeout, traffLimit):
+        app.logger.debug( "postauth allowRadiusSubs() userName '{0}', pass {1}, TO {2}, traff {3}".format( userName, passWord, sessionTimeout, traffLimit) )
+        app.logger.debug( "postauth allowRadiusSubs() returns '{0}'".format(result) )
         return result
 
     try:        
@@ -190,8 +194,6 @@ def allowRadiusSubs(request):
     app.logger.debug( "postauth allowRadiusSubs() returns '{0}'".format(result) )
     return result
 
-
-
 """
 Method checks POST variable list for completness and correctness.
 IN
@@ -209,7 +211,8 @@ def postauthGoodVars(request):
 
     for POSTVarName in POSTVarsNames:
         POSTVarValue = inputJSON.get(POSTVarName, None)
-        if not POSTVarValue or not formatOk('postauthGoodVars', POSTVarName, POSTVarValue):
+        if not POSTVarValue: #or not formatOk('postauthGoodVars', POSTVarName, POSTVarValue):
+            app.logger.warning( "postauth postauthGoodVars() input var '{0}' check failed".format(POSTVarName) )
             result = False
             break
 
@@ -237,9 +240,10 @@ def doPostauth():
     if not authenticated(request):
         return json.jsonify(auth = 'fail', result = 'fail')
 
-    if isJson(request) and postauthGoodVars(request)\
-     and allowRadiusSubs(request) and updateSessionLimits(request): 
-        return json.jsonify(auth = 'ok', result = 'ok')
+    if isJson(request) and postauthGoodVars(request):
+        if isUbiquity(request) and allowUbiquitySubs(request) and updateSessionLimits(request):
+            return json.jsonify(auth = 'ok', result = 'ok')
+        elif allowRadiusSubs(request) and updateSessionLimits(request):        
+            return json.jsonify(auth = 'ok', result = 'ok')
         
     return json.jsonify(auth = 'ok', result = 'fail')
-

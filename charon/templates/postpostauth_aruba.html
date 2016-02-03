@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title></title>
+</head>
+<body>
+
+<form name="login" action="{{ formdata.hotspot_login_url }}" method="post" >
+<input type="hidden" name="url" value="{{ formdata.origin_url }}" />
+<input name="user" type="hidden" value="{{ formdata.username }}"/>
+<input name="password" type="hidden" value="{{ formdata.password }}"/>
+<input type="hidden" name="cmd" value="authenticate">
+<input type="hidden" name="mac" value="{{ formdata.username }}">
+<!--<input type="hidden" name="essid" value="IAP_HOTSPOT">
+<input type="hidden" name="ip" value="">-->
+</form>
+
+<script language="JavaScript">
+   document.login.submit();
+</script>
+
+
+</body>
+</html>

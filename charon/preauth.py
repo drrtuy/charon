@@ -1,13 +1,15 @@
 from charon import app
-from flask import request, render_template, abort, json
-from re import search as regex_search
-from requests import post
+from flask import request, render_template, abort, json, session, g, make_response
+#from re import search as regex_search
+#from requests import post
 from hashlib import sha256
 from datetime import date
 from psycopg2 import connect, Error as pgError
 from json import loads as json_loads, dumps as json_dumps
-
-from misc import formatOk, genPass, idleCheck
+from inspect import stack
+from misc import formatOk, genPass, idleCheck, getPreauthTemplateData, getPreauthModel
+from ubiquity import doUbiquityRedirect
+from model import *
 
 MAC_REGEXP = r'^([0-9a-fA-F][0-9a-fA-F][:-]){5}([0-9a-fA-F][0-9a-fA-F])$'
 SN_REGEXP = r'([0-9a-fA-F]){12}'
@@ -15,10 +17,30 @@ POSINT_REGEXP = r'^\d*$'
 EMPTY_REGEXP = r'^$'
 ANY_REGEXP = r'^.*$'
 POST_MAIN_VARS = ['client_id', 'hotspot_id', 'entrypoint_id']
-POST_PREAUTH_VARS = POST_MAIN_VARS + ['hotspot_login_url']
+MT_PREAUTH_VARS = POST_MAIN_VARS + ['hotspot_login_url']
+UNI_PREAUTH_VARS = ['id', 'ap', 'url' ]
+ARUBA_PREAUTH_VARS = ['mac', 'apname', 'url' ]
+RUCKUS_PREAUTH_VARS = ['mac', 'client_mac', 'url']
 POST_POSTAUTH_VARS = POST_MAIN_VARS + ['session_hash', 'session_timeout', 'traffic_limit', 'next_conn_in']
 POST_PPOSTAUTH_VARS = POST_MAIN_VARS
 FREERAD_ADD_OP = r'+='
+DEB_PREFIX = 'preauth'
+
+"""
+def getDebugStr(prefix, request = None, result = None):
+
+    debugString = ''
+
+    prevFuncName = (u, u, u, prevFuncName, u, u) = stack()[1]
+
+    if request != None:        
+        debugString = "{0} {1} request {2}".format(prefix, prevFuncName, request.values.to_dict(flat = False) )
+   
+    #if result != None:
+    #    debugString = "{0} {1} {2}".format(prefix, prevFuncName, result )
+            
+    return debugString
+"""
 
 """
 Method get a HotSpot id via Shopster API.
@@ -28,18 +50,39 @@ OUT
     None || one of the hotspot types as a string
 """
 def getHotspotId(request):
+
     result = None
-    if request.form:
-        app.logger.debug( "preauth getHotspotId() request POST data {0}".format(json_dumps(request.form)) )
+    h_id = None
 
-    h_id = request.values.get('hotspot_id', None)    
+    (u, u, u, currFuncName, u, u) = stack()[0]
+    app.logger.debug( '{0} {1}() request args {2}'.format(DEB_PREFIX, currFuncName, request.values.to_dict(flat = False) ) )
+
+    if request.method == 'POST':
+        h_id = request.values.get('hotspot_id', None)
+    elif request.method == 'GET':
+        idNames = [ 'ap', 'apname', 'mac' ]
+        for idName in idNames:
+            try:
+                h_id = request.args[idName]
+                break
+            except KeyError:
+                continue
+        
+    #test cases    
     if h_id == 'outage':
-        app.logger.error("preauth getHotspotId() shopster is down")
-        return result
-    result = 'mikrotik'
-
-    if request.form:
-        app.logger.debug( "preauth getHotspotId() returns {}".format(result) )
+        app.logger.error("preauth TEST CASE getHotspotId() shopster is down")
+        result = 'outage'
+    elif h_id == '44:d9:e7:48:81:63' or h_id == '44:d9:e7:48:84:74':
+        result = 'ubiquity'
+    elif h_id == 'ac:a3:1e:c5:8c:7c':
+        result = 'aruba'
+    elif h_id == '6caab339afe0':
+        result = 'ruckus'
+    elif h_id != None and request.method == 'POST':
+        result = 'mikrotik'
+#    else:
+        
+    app.logger.debug( "preauth getHotspotId() returns {0}".format(result) )
 
     return result 
 
@@ -52,17 +95,20 @@ OUT
 """
 def preauthGoodVars(request):
 
-    result = True
+    result = False
 
-    if request.form:
-        app.logger.debug( "preauth preauthGoodVars() request POST data {0}".format(json_dumps(request.form)) )
-    POSTVarsNames = POST_PREAUTH_VARS
+    (u, u, u, currFuncName, u, u) = stack()[0]
+    app.logger.debug( '{0} {1}() request args {2}'.format(DEB_PREFIX, currFuncName, request.values.to_dict(flat = False) ) )
+
+    POSTVarsNames = session.get( 'POSTVarsNames', None )
     for POSTVarName in POSTVarsNames:
             POSTVarValue = request.values.get(POSTVarName, None)            
-            if not POSTVarValue or not formatOk('preauthGoodVars', POSTVarName, POSTVarValue):
+            if not POSTVarValue: #or not formatOk('preauthGoodVars', POSTVarName, POSTVarValue):
                 app.logger.warning( "preauth preauthGoodVars() input var '{0}' check failed".format(POSTVarName) )
-                result = False
+                #result = False
                 return result
+    if len( POSTVarsNames ):
+        result = True        
 
     app.logger.debug( "preauth preauthGoodVars() returns {0}".format(result) )
     return result
@@ -76,8 +122,9 @@ OUT
 """
 #change userMAC to userID
 def doSaveSessionData(request):
-    
-    app.logger.debug( "preauth doSaveSessionData() request POST data {0}".format(json_dumps(request.form)) )
+
+    (u, u, u, currFuncName, u, u) = stack()[0]
+    app.logger.debug( '{0} {1}() request args {2}'.format(DEB_PREFIX, currFuncName, request.values.to_dict(flat = False) ) )
     
     result = False
 
@@ -85,15 +132,17 @@ def doSaveSessionData(request):
     d = app.config.get('DB_NAME')
     u = app.config.get('DB_USER') 
     p = app.config.get('DB_PASS')
-    userMAC = userName = request.values.get('client_id', None)
-    hotspotID = request.values.get('hotspot_id', None)
-    entrypointID = request.values.get('entrypoint_id', None)
-    originalURL = request.values.get('original_url', None)
-    hotspotLoginURL = request.values.get('hotspot_login_url', None) 
+
+    model = getPreauthModel(request)
+
+    userMAC = userName = model.get('client_id', None)
+    hotspotID = model.get('hotspot_id', None)
+    entrypointID = model.get('entrypoint_id', None)
+    originalURL = model.get('original_url', None)
+    hotspotLoginURL = model.get('hotspot_login_url', None) 
     passWord = genPass()
     
-    #fast hack
-    #originalURL = 'backup-2.getshopster.com:8875'
+    #print model
 
     if not userName or not passWord or not hotspotID or not entrypointID\
  or not originalURL or not hotspotLoginURL:
@@ -167,30 +216,54 @@ IN
 OUT 
     str
 """
-@app.route("/preauth/", methods=['POST'])
+@app.route("/preauth/", methods=['POST', 'GET'])
 def doPreauth():
-    POSTVarsNames = POST_PREAUTH_VARS    
 
     result = None
+    POSTVarsNames = [ ]
 
     hotspotType = getHotspotId(request)
-    varsOk = preauthGoodVars(request)    
-    if hotspotType is not None and varsOk:        
+
+    if hotspotType == 'mikrotik':
+        POSTVarsNames = MT_PREAUTH_VARS
+    elif hotspotType == 'ubiquity':    
+        POSTVarsNames = UNI_PREAUTH_VARS         
+    elif hotspotType == 'aruba':    
+        POSTVarsNames = ARUBA_PREAUTH_VARS  
+    elif hotspotType == 'ruckus':    
+        POSTVarsNames = RUCKUS_PREAUTH_VARS                
+    elif hotspotType == 'outage': #test case
+        hotspotType = None
+        POSTVarsNames = MT_PREAUTH_VARS
+
+    session['hotspotType'] = hotspotType    
+    session['POSTVarsNames'] = POSTVarsNames    
+
+    varsOk = preauthGoodVars(request) 
+
+    if hotspotType is not None:        
         waitTime = idleCheck(request)
         
         if waitTime != False and waitTime:
             extradata = {'wait_time': waitTime}
             result = render_template('preauth_idle.html', extradata = extradata)
-            return result
+            r = make_response( result )
+            r.headers['Strict-Transport-Security'] = 'max-age=0'
+            return r
+
         if not doSaveSessionData(request):    
             result = render_template('error.html') 
             return result
-        extradata = {}
-        for POSTVarsName in POSTVarsNames:
-            extradata[POSTVarsName] = request.values.get(POSTVarsName)        
+
+        session['model'] = getPreauthTemplateData(request)        
+        extradata = session['model']
+
         result = render_template('preauth.html', extradata = extradata, url = app.config.get('SHOPSTER_URL'))
-        return result
-    elif varsOk:                                #shopster system is down
+        r = make_response( result )
+        r.headers['Strict-Transport-Security'] = 'max-age=0'
+        return r
+
+    elif varsOk:                                #didnt get hotspot type and vars are ok then shopster system is down
         result = render_template('shopster_outage.html')
         return result
     
