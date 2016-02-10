@@ -9,16 +9,6 @@ from json import loads as json_loads, dumps as json_dumps
 from inspect import stack
 from model import *
 
-MAC_REGEXP = r'^([0-9a-fA-F][0-9a-fA-F][:-]){5}([0-9a-fA-F][0-9a-fA-F])$'
-SN_REGEXP = r'([0-9a-fA-F]){12}'
-POSINT_REGEXP = r'^\d*$'
-EMPTY_REGEXP = r'^$'
-ANY_REGEXP = r'^.*$'
-POST_MAIN_VARS = ['client_id', 'hotspot_id', 'entrypoint_id']
-POST_PREAUTH_VARS = POST_MAIN_VARS + ['hotspot_login_url']
-POST_POSTAUTH_VARS = POST_MAIN_VARS + ['session_hash', 'session_timeout', 'traffic_limit', 'next_conn_in']
-POST_PPOSTAUTH_VARS = POST_MAIN_VARS
-FREERAD_ADD_OP = r'+='
 DEB_PREFIX='postPostAuth'
 
 from misc import formatOk, idleCheck
@@ -37,11 +27,7 @@ def getFormData(request):
     d = app.config.get('DB_NAME')
     u = app.config.get('DB_USER') 
     p = app.config.get('DB_PASS')
-    
-    #clientID = request.values.get('client_id', None)
-    #hotspotID = request.values.get('hotspot_id', None)
-
-    #if not clientID or not hotspotID:
+      
     model = session.get('model')
     clientID = model.get('client_id')
     hotspotID = model.get('hotspot_id')
@@ -93,6 +79,7 @@ def getFormData(request):
     return result
 
 """
+LEGACY should be removed
 Method checks POST variable list for completness and correctness.
 IN
     request: Flask.Request
@@ -102,20 +89,6 @@ OUT
 def ppostauthGoodVars(request):
     result = True
     return result
-    """
-    app.logger.debug( "postpostauth ppostauthGoodVars() request POST data {0}".format(json_dumps(request.form)) )
-
-    POSTVarsNames = POST_PPOSTAUTH_VARS
-    for POSTVarName in POSTVarsNames:
-            POSTVarValue = request.values.get(POSTVarName, None)            
-            if not POSTVarValue: #or not formatOk('ppostauthGoodVars', POSTVarName, POSTVarValue):
-                app.logger.warning( "postpostauth ppostauthGoodVars() input var '{0}' check failed".format(POSTVarName) )
-                result = False
-                break
-
-    app.logger.debug( "postpostauth ppostauthGoodVars() returns {0}".format(result) )
-    return result
-    """
 
 """
 Method checks variable for correctness in a particular function.
@@ -143,13 +116,22 @@ def doPostPostauth():
         
         formData = getFormData(request)
         model = session.get('model')
-        #print "zone director flag value", session['zone_director_passed']
 
         if formData != None and idleCheck(request) == 0:
             if hotspotType == 'mikrotik':            
                 return render_template('postpostauth.html', formdata = formData)
             if hotspotType == 'aruba':
                 return render_template('postpostauth_aruba.html', formdata = formData)
+
+            if hotspotType == 'openwrt':
+                url = 'http://{0}:{1}/logon?username={2}&password={3}'.format( 
+                    formData.get('hotspot_login_url'), model.get('uamport'),
+                    formData.get('username'), formData.get('password')
+                )
+                return render_template('postpostauth_openwrt.html', url = url ) 
+
+            if hotspotType == 'ubiquity':
+                return render_template('postpostauth_ubiquity.html', url = formData.get('origin_url') )           
 
             if hotspotType == 'ruckus' and not session.get('zone_director_passed'):
                     r = make_response( 
@@ -173,30 +155,3 @@ def doPostPostauth():
             return render_template('error.html')
             
     return render_template('error.html')
-
-"""
-@app.route("/buckus/", methods=['POST', 'GET'])
-def buckus():
-    #xml = '<ruckus> <req-password>myPassword</req-password> <version>1.0</version> <command cmd="user-authenticate" ipaddr="172.16.17.101" macaddr="00:22:FB:18:8B:26" name="test" password="test"/> </ruckus>'
-    xml = '<ruckus> <version>1.0</version> <command cmd="user-authenticate" ipaddr="172.16.17.101" macaddr="00:22:FB:18:8B:26" name="test" password="test"/> </ruckus>'
-    hotspot = session.get('model')
-    r = make_response( render_template('postpostauth_ruckus.html',\
-    url = 'https://{0}/443/admin/_portalintf.jsp'.format(hotspot.get('hotspot_login_url'),\
-    data = xml) 
-    ) )
-    r.headers['Strict-Transport-Security'] = 'max-age=0'
-    return r
-@app.route("/buckusa/", methods=['POST', 'GET', 'OPTIONS'])
-def buckusa():
-    if request.method == 'OPTIONS':
-        r = make_response( " ", 200 )
-        r.headers['Strict-Transport-Security'] = 'max-age=0'
-        r.headers['Access-Control-Allow-Origin'] = '*'
-        r.headers['Access-Control-Allow-Methods'] = 'POST, GET, OPTIONS'
-        r.headers['Access-Control-Allow-Headers'] = 'Content-Type'
-        return r
-    r = make_response( "xml answer", 200 )
-    r.headers['Access-Control-Allow-Origin'] = '*'
-    r.headers['Strict-Transport-Security'] = 'max-age=0'
-    return r
-"""

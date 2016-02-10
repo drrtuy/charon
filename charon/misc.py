@@ -23,7 +23,38 @@ MB=1048576
 DEB_PREFIX = 'misc'
 
 """
-The func generates a password.
+Project logger wrapper.
+IN
+    logger: logger with a paritucular level.
+    prefix: str
+    second: str
+    third: str
+OUT
+    void
+"""
+def logIt(logger, prefix, second = None, third = None):
+
+    debugString = ''
+
+    ( u, u, u, prevFuncName, u, u ) = stack()[1]
+
+    if third == None:
+        debugString = '{0} {1} {2}'.format( prefix, prevFuncName, second )
+    else:
+        debugString = '{0} {1} {2} {3}'.format( prefix, prevFuncName, second, third )
+               
+    if logger:
+        logger(debugString)
+
+#def logArgs(prefix, args):
+#    return logIt( app.logger.debug, prefix, ' request args ', args )
+
+#def logResult(prefix, result):
+#    return logIt( app.logger.debug, prefix, ' returns ', result )
+
+
+"""
+The func generates a password. Static is enough 
 OUT
     str
 """
@@ -192,13 +223,21 @@ def getPreauthModel(request):
         result['original_url'] = request.args.get('url')
         result['hotspot_login_url'] = 'http://{0}/cgi-bin/login'.format( request.args.get('switchip') )
     elif hotspotType == 'ruckus':
-        result = Ruckus()
+        #result = Ruckus()
         result['client_id'] = request.args.get('client_mac')
         result['hotspot_id'] = request.args.get('mac')
         result['entrypoint_id'] = result['hotspot_id']
         result['original_url'] = request.args.get('url')
         result['hotspot_login_url'] = request.args.get('sip')
         result['uip'] = request.args.get('uip')
+    elif hotspotType == 'openwrt':
+        result = Ruckus()
+        result['client_id'] = request.args.get('mac')
+        result['hotspot_id'] = request.args.get('called')
+        result['entrypoint_id'] = result['hotspot_id']
+        result['original_url'] = request.args.get('userurl')
+        result['hotspot_login_url'] = request.args.get('uamip')
+        result['uamport'] = request.args.get('uamport')        
 
     app.logger.debug("misc getPreauthModel() returns {0}".format( json_dumps(result) ) )
     

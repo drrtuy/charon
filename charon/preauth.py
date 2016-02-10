@@ -1,46 +1,20 @@
 from charon import app
 from flask import request, render_template, abort, json, session, g, make_response
-#from re import search as regex_search
-#from requests import post
 from hashlib import sha256
 from datetime import date
 from psycopg2 import connect, Error as pgError
 from json import loads as json_loads, dumps as json_dumps
 from inspect import stack
-from misc import formatOk, genPass, idleCheck, getPreauthTemplateData, getPreauthModel
+from misc import formatOk, genPass, idleCheck, getPreauthTemplateData, getPreauthModel, logIt 
 from ubiquity import doUbiquityRedirect
-from model import *
 
-MAC_REGEXP = r'^([0-9a-fA-F][0-9a-fA-F][:-]){5}([0-9a-fA-F][0-9a-fA-F])$'
-SN_REGEXP = r'([0-9a-fA-F]){12}'
-POSINT_REGEXP = r'^\d*$'
-EMPTY_REGEXP = r'^$'
-ANY_REGEXP = r'^.*$'
 POST_MAIN_VARS = ['client_id', 'hotspot_id', 'entrypoint_id']
 MT_PREAUTH_VARS = POST_MAIN_VARS + ['hotspot_login_url']
 UNI_PREAUTH_VARS = ['id', 'ap', 'url' ]
 ARUBA_PREAUTH_VARS = ['mac', 'apname', 'url' ]
 RUCKUS_PREAUTH_VARS = ['mac', 'client_mac', 'url']
-POST_POSTAUTH_VARS = POST_MAIN_VARS + ['session_hash', 'session_timeout', 'traffic_limit', 'next_conn_in']
-POST_PPOSTAUTH_VARS = POST_MAIN_VARS
-FREERAD_ADD_OP = r'+='
+OPENWRT_PREAUTH_VARS = ['userurl', 'uamip', 'uamport', 'mac']
 DEB_PREFIX = 'preauth'
-
-"""
-def getDebugStr(prefix, request = None, result = None):
-
-    debugString = ''
-
-    prevFuncName = (u, u, u, prevFuncName, u, u) = stack()[1]
-
-    if request != None:        
-        debugString = "{0} {1} request {2}".format(prefix, prevFuncName, request.values.to_dict(flat = False) )
-   
-    #if result != None:
-    #    debugString = "{0} {1} {2}".format(prefix, prevFuncName, result )
-            
-    return debugString
-"""
 
 """
 Method get a HotSpot id via Shopster API.
@@ -49,18 +23,17 @@ IN
 OUT
     None || one of the hotspot types as a string
 """
-def getHotspotId(request):
+def getHotspotType(request):
 
     result = None
     h_id = None
 
-    (u, u, u, currFuncName, u, u) = stack()[0]
-    app.logger.debug( '{0} {1}() request args {2}'.format(DEB_PREFIX, currFuncName, request.values.to_dict(flat = False) ) )
+    logIt( app.logger.debug, DEB_PREFIX, ' request args ', request.values.to_dict(flat = False) )
 
     if request.method == 'POST':
         h_id = request.values.get('hotspot_id', None)
     elif request.method == 'GET':
-        idNames = [ 'ap', 'apname', 'mac' ]
+        idNames = [ 'ap', 'apname', 'called', 'mac' ]
         for idName in idNames:
             try:
                 h_id = request.args[idName]
@@ -70,7 +43,7 @@ def getHotspotId(request):
         
     #test cases    
     if h_id == 'outage':
-        app.logger.error("preauth TEST CASE getHotspotId() shopster is down")
+        logIt( app.logger.debug, DEB_PREFIX, 'TEST CASE shopster is down' )
         result = 'outage'
     elif h_id == '44:d9:e7:48:81:63' or h_id == '44:d9:e7:48:84:74':
         result = 'ubiquity'
@@ -78,13 +51,16 @@ def getHotspotId(request):
         result = 'aruba'
     elif h_id == '6caab339afe0':
         result = 'ruckus'
+    elif h_id == '90-F6-52-5B-73-F4':
+        result = 'openwrt'
     elif h_id != None and request.method == 'POST':
         result = 'mikrotik'
-#    else:
-        
-    app.logger.debug( "preauth getHotspotId() returns {0}".format(result) )
+
+    logIt( app.logger.debug, DEB_PREFIX, ' returns ', result )
 
     return result 
+
+getHotspotId = getHotspotType
 
 """
 Method checks POST variable list for completness and correctness.
@@ -97,20 +73,19 @@ def preauthGoodVars(request):
 
     result = False
 
-    (u, u, u, currFuncName, u, u) = stack()[0]
-    app.logger.debug( '{0} {1}() request args {2}'.format(DEB_PREFIX, currFuncName, request.values.to_dict(flat = False) ) )
+    logIt ( app.logger.debug, DEB_PREFIX, ' request args ', request.values.to_dict(flat = False) ) 
 
     POSTVarsNames = session.get( 'POSTVarsNames', None )
     for POSTVarName in POSTVarsNames:
             POSTVarValue = request.values.get(POSTVarName, None)            
-            if not POSTVarValue: #or not formatOk('preauthGoodVars', POSTVarName, POSTVarValue):
-                app.logger.warning( "preauth preauthGoodVars() input var '{0}' check failed".format(POSTVarName) )
-                #result = False
+            if not POSTVarValue:
+                logIt( app.logger.warning, DEB_PREFIX, ' input var {0} check failed'.format( POSTVarName) )
                 return result
     if len( POSTVarsNames ):
         result = True        
 
-    app.logger.debug( "preauth preauthGoodVars() returns {0}".format(result) )
+    logIt( app.logger.debug, DEB_PREFIX, ' returns ', result )
+
     return result
 
 """
@@ -123,8 +98,7 @@ OUT
 #change userMAC to userID
 def doSaveSessionData(request):
 
-    (u, u, u, currFuncName, u, u) = stack()[0]
-    app.logger.debug( '{0} {1}() request args {2}'.format(DEB_PREFIX, currFuncName, request.values.to_dict(flat = False) ) )
+    logIt ( app.logger.debug, DEB_PREFIX, ' request args ', request.values.to_dict(flat = False) ) 
     
     result = False
 
@@ -142,10 +116,7 @@ def doSaveSessionData(request):
     hotspotLoginURL = model.get('hotspot_login_url', None) 
     passWord = genPass()
     
-    #print model
-
-    if not userName or not passWord or not hotspotID or not entrypointID\
- or not originalURL or not hotspotLoginURL:
+    if None in ( userName, passWord, hotspotID, entrypointID, originalURL, hotspotLoginURL ):
         return result
 
     try:
@@ -164,7 +135,7 @@ def doSaveSessionData(request):
         
         c.commit()
     except pgError as e:
-        app.logger.error("preauth doSaveSessionData()" + str(e))
+        logIt( app.logger.error, DEB_PREFIX, 'database exception', str(e) )
         c.close()
         return result
         
@@ -196,11 +167,11 @@ def doSaveSessionData(request):
         c.commit()
         result = True
     except pgError as e:
-        app.logger.error("preauth doSaveSessionData()" + str(e))
+        logIt( app.logger.error, DEB_PREFIX, 'database exception', str(e) )
     finally:
         c.close()
 
-    app.logger.debug( "preauth doSaveSessionData() returns '{0}'".format(result) )
+    logIt( app.logger.error, DEB_PREFIX, 'result', result )
 
     return result
 
@@ -208,13 +179,9 @@ def doSaveSessionData(request):
 """
 Client enters the systems at this point. His POST request contains
 IN
-    client_id: str (as a MAC)
-    hotspot_id: str (as a MAC)
-    entrypoint_id: str (as a MAC)
-    original_url: str
-    hotspot_login_url: str
+    Flask.Request
 OUT 
-    str
+    html doc as str
 """
 @app.route("/preauth/", methods=['POST', 'GET'])
 def doPreauth():
@@ -222,7 +189,7 @@ def doPreauth():
     result = None
     POSTVarsNames = [ ]
 
-    hotspotType = getHotspotId(request)
+    hotspotType = getHotspotType(request)
 
     if hotspotType == 'mikrotik':
         POSTVarsNames = MT_PREAUTH_VARS
@@ -231,7 +198,9 @@ def doPreauth():
     elif hotspotType == 'aruba':    
         POSTVarsNames = ARUBA_PREAUTH_VARS  
     elif hotspotType == 'ruckus':    
-        POSTVarsNames = RUCKUS_PREAUTH_VARS                
+        POSTVarsNames = RUCKUS_PREAUTH_VARS 
+    elif hotspotType == 'openwrt':    
+        POSTVarsNames = OPENWRT_PREAUTH_VARS 
     elif hotspotType == 'outage': #test case
         hotspotType = None
         POSTVarsNames = MT_PREAUTH_VARS
@@ -269,4 +238,3 @@ def doPreauth():
     
     result = render_template('error.html')
     return result
-

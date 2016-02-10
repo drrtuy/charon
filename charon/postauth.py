@@ -7,21 +7,13 @@ from datetime import datetime
 from psycopg2 import connect, Error as pgError
 from json import loads as json_loads, dumps as json_dumps
 from base64 import b64encode
-
-MAC_REGEXP = r'^([0-9a-fA-F][0-9a-fA-F][:-]){5}([0-9a-fA-F][0-9a-fA-F])$'
-SN_REGEXP = r'([0-9a-fA-F]){12}'
-POSINT_REGEXP = r'^\d*$'
-EMPTY_REGEXP = r'^$'
-ANY_REGEXP = r'^.*$'
-POST_MAIN_VARS = ['client_id', 'hotspot_id', 'entrypoint_id']
-POST_PREAUTH_VARS = POST_MAIN_VARS + ['hotspot_login_url']
-POST_POSTAUTH_VARS = POST_MAIN_VARS + ['session_hash', 'session_timeout', 'traffic_limit', 'next_conn_in']
-POST_PPOSTAUTH_VARS = POST_MAIN_VARS
-FREERAD_ADD_OP = r'+='
-
-#from misc import formatOk, genPass, idleCheck, isJson
 from misc import *
 from ubiquity import isUbiquity, allowUbiquitySubs
+
+POST_MAIN_VARS = ['client_id', 'hotspot_id', 'entrypoint_id']
+POST_POSTAUTH_VARS = POST_MAIN_VARS + ['session_hash', 'session_timeout', 'traffic_limit', 'next_conn_in']
+FREERAD_ADD_OP = r'+='
+DEB_PREFIX = 'postauth'
 
 ########################postauth
 
@@ -32,11 +24,10 @@ IN
 OUT
     Bool
 """
-#FIX add Basic
 def authenticated(request):
 
     a = request.headers.get('Authorization', None)
-    app.logger.debug( "postauth authenticated() Authorization HTTP header '{0}'".format(a)) 
+    logIt( app.logger.debug, DEB_PREFIX, 'Authorization HTTP header', a )
 
     result = False
          
@@ -44,19 +35,18 @@ def authenticated(request):
         try:
             u, recvdHash = a.split()
         except ValueError:
-            app.logger.warning( "postauth authenticated() wrong header format")
+            logIt( app.logger.warning, DEB_PREFIX, 'wrong header format' )
             result = False            
             return result
         secret = app.config.get('SHOPSTER_SECRET')
         day = datetime.now().strftime('%d')
         salt = '{0}:{1}'.format(secret, day)
-        #today = str(date.today().day)
         expectedHash = b64encode( sha256(salt).hexdigest() )
-        app.logger.debug( "postauth authenticated() received hash '{0}' expected hash '{1}'".format(recvdHash, expectedHash))
+        logIt( app.logger.debug, DEB_PREFIX, 'received hash "{2}" expected hash "{3}"'.format( recvdHash, expectedHash ))
         if expectedHash == recvdHash:
             result = True
 
-    app.logger.debug( "postauth authenticated() returns '{0}'".format(result))
+    logIt( app.logger.debug, DEB_PREFIX, ' returns ', result )
 
     return result
 
@@ -67,7 +57,6 @@ IN
 OUT
     Bool
 """
-#fix it change to UPSERT request
 def updateSessionLimits(request):
     h = app.config.get('DB_HOST')
     d = app.config.get('DB_NAME')
@@ -76,7 +65,7 @@ def updateSessionLimits(request):
 
     result = False
     inputJSON = getJson(request)
-    app.logger.debug( "postauth updateSessionLimits() request json '{0}'".format(json_dumps(inputJSON)) )
+    logIt( app.logger.debug, DEB_PREFIX, 'request json', json_dumps(inputJSON) )
 
     clientID = extractUserName(request)
     idleTime = extractIdleTime(request)
@@ -86,10 +75,10 @@ def updateSessionLimits(request):
     traffLimit = extractTraffLimit(request)
 
     if None in ( clientID, idleTime, authType, hotspotID, sessionLimit, traffLimit):
-        app.logger.debug( "postauth updateSessionLimits() client '{0}', idle {1}, authtype {2}, hotspot {3} TO {4} traff {5}".format(\
+        logIt( app.logger.debug, DEB_PREFIX, 'client {0}, idle {1}, authtype {2}, hotspot {3} TO {4} traff {5}'.format(\
             clientID, idleTime, authType, hotspotID, sessionLimit, traffLimit )
         )
-        app.logger.debug( "postauth updateSessionLimits() returns '{0}'".format(result) )
+        logIt( app.logger.debug, DEB_PREFIX, 'returns', result )
         return result
 
 
@@ -111,10 +100,10 @@ def updateSessionLimits(request):
         c.close()
         result = True
     except pgError as e:
-        app.logger.error("postauth updateSessionLimits()" + str(e))
+        logIt( app.logger.error, DEB_PREFIX, 'database exception', str(e) )
         c.close()
 
-    app.logger.debug( "postauth updateSessionLimits() returns '{0}'".format(result) )
+    logIt( app.logger.debug, DEB_PREFIX, 'returns', result )
 
     return result
 
@@ -134,7 +123,7 @@ def allowRadiusSubs(request):
 
     result = False
     inputJSON = getJson(request)
-    app.logger.debug( "postauth allowRadiusSubs() request json '{0}'".format(json_dumps(inputJSON)) )
+    logIt( app.logger.debug, DEB_PREFIX, 'request json', json_dumps(inputJSON) )
 
     userMAC = userName = extractUserName(request)
     passWord = genPass()
@@ -142,8 +131,9 @@ def allowRadiusSubs(request):
     traffLimit = extractTraffLimit(request)
 
     if None in (userName, passWord, sessionTimeout, traffLimit):
-        app.logger.debug( "postauth allowRadiusSubs() userName '{0}', pass {1}, TO {2}, traff {3}".format( userName, passWord, sessionTimeout, traffLimit) )
-        app.logger.debug( "postauth allowRadiusSubs() returns '{0}'".format(result) )
+        logIt( app.logger.debug, DEB_PREFIX, 'userName {0}, pass {1}, TO {2}, traff {3}'.format( userName, passWord, sessionTimeout, traffLimit)
+        )
+        logIt( app.logger.debug, DEB_PREFIX, 'returns', result )
         return result
 
     try:        
@@ -188,10 +178,11 @@ def allowRadiusSubs(request):
 
         result = True
     except pgError as e:
-        app.logger.error("postauth nallowRadiusSubs()" + str(e))
+        logIt( app.logger.error, DEB_PREFIX, 'database exception', str(e) )
         c.close()
 
-    app.logger.debug( "postauth allowRadiusSubs() returns '{0}'".format(result) )
+    logIt( app.logger.debug, DEB_PREFIX, 'returns', result )
+
     return result
 
 """
