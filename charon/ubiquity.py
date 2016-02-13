@@ -6,8 +6,10 @@ from ssl import SSLError
 from time import sleep
 
 UBIQUITY_VARS = ['id', 'ap','url']
+DEB_PREFIX = 'ubiquity'
 
 """
+LEGACY. should be removed
 Client enters the systems at this point. His POST request contains
 IN
     client_id: str (as a MAC)
@@ -18,7 +20,7 @@ IN
 OUT 
     str
 """
-@app.route("/ubiquity/", methods=['GET'])
+#@app.route("/ubiquity/", methods=['GET'])
 def doUbiquityRedirect():
     getVarNames = UBIQUITY_VARS   
 
@@ -56,7 +58,8 @@ def isUbiquity(request):
 
     inputJSON = getJson(request)
 
-    app.logger.debug( "postauth isUbiquity() request json '{0}'".format(json_dumps(inputJSON)) )
+    logIt( app.logger.debug, DEB_PREFIX, 'request json', json_dumps(inputJSON) )
+
     controllerAddr = extractControllerAddr(request)
     controllerPort = extractControllerPort(request)
     controllerUser = extractControllerUser(request)
@@ -65,7 +68,7 @@ def isUbiquity(request):
     if None not in ( controllerAddr, controllerPort, controllerUser, controllerPass ):
         result = True
 
-    app.logger.debug( "postauth isUbiquity() returns '{0}'".format(result) )
+    logIt( app.logger.debug, DEB_PREFIX, 'returns', result )
 
     return result
 
@@ -74,7 +77,7 @@ from unifi.controller import Controller, PYTHON_VERSION
 class Ubnt(Controller):
 
     def _login(self, version):
-        app.logger.debug('Ubnt _login() as %s', self.username)
+        #app.logger.debug('Ubnt _login() as %s', self.username)
 
         params = {'username': self.username, 'password': self.password}
         login_url = self.url
@@ -96,12 +99,12 @@ class Ubnt(Controller):
         self.opener.open( login_url, params, timeout = app.config.get('UBNT_CONN_TO') ).read()
 
     def _logout(self):
-        app.logger.debug('Ubnt._logout()')
+        #app.logger.debug('Ubnt._logout()')
         self.opener.open( self.url + 'logout', timeout = app.config.get('UBNT_CONN_TO') ).read()
 
 
 """
-The func allows user at Ubiquity hotspot using its API.
+The func authorizes a user at Ubiquity hotspot by API.
 IN
     request: Flask.Request
 OUT
@@ -110,7 +113,8 @@ OUT
 def allowUbiquitySubs(request):
     result = False
     inputJSON = getJson(request)
-    app.logger.debug( "postauth allowUbiquitySubs() request json '{0}'".format(json_dumps(inputJSON)) )
+
+    logIt( app.logger.debug, DEB_PREFIX, 'request json', json_dumps(inputJSON) )
 
     userName = extractUserName(request)
     sessionTimeout = extractSessionLimit(request)
@@ -121,8 +125,8 @@ def allowUbiquitySubs(request):
     cPass = extractControllerPass(request)
     cVersion = extractControllerVersion(request)   
 
-    if not userName or not sessionTimeout or not traffLimit or not cPort or not cAddr or not cUser or not cPass:
-        app.logger.debug( "postauth allowUbiquitySubs() returns '{0}'".format(result) )
+    if None in ( userName, sessionTimeout, traffLimit, cPort, cAddr, cUser, cPass ):
+        logIt( app.logger.error, DEB_PREFIX, 'returns', result )
         return result        
 
     try:
@@ -133,7 +137,6 @@ def allowUbiquitySubs(request):
     except ( URLError, HTTPError, SSLError ):
         result = False        
 
-    app.logger.debug( "postauth allowUbiquitySubs() returns '{0}'".format(result) )
+    logIt( app.logger.debug, DEB_PREFIX, 'returns', result )
 
     return result
-

@@ -42,7 +42,7 @@ def authenticated(request):
         day = datetime.now().strftime('%d')
         salt = '{0}:{1}'.format(secret, day)
         expectedHash = b64encode( sha256(salt).hexdigest() )
-        logIt( app.logger.debug, DEB_PREFIX, 'received hash "{2}" expected hash "{3}"'.format( recvdHash, expectedHash ))
+        logIt( app.logger.debug, DEB_PREFIX, 'received hash "{0}" expected hash "{1}"'.format( recvdHash, expectedHash ) )
         if expectedHash == recvdHash:
             result = True
 
@@ -167,8 +167,8 @@ def allowRadiusSubs(request):
             WHERE username=%s AND attribute=%s AND op=%s;', 
             (traffLimit, userName, 'Mikrotik-Total-Limit', FREERAD_ADD_OP)
         )        
-        cursor.execute('INSERT INTO radreply\
-            (username,attribute,op,value)\
+        cursor.execute('INSERT INTO radreply \
+            (username,attribute,op,value) \
             SELECT %s,%s,%s,%s WHERE NOT EXISTS (SELECT 1 FROM radreply WHERE username=%s AND attribute=%s AND op=%s);',
             (userName, 'Mikrotik-Total-Limit', FREERAD_ADD_OP, traffLimit, userName, 'Mikrotik-Total-Limit', FREERAD_ADD_OP)
         )
@@ -198,16 +198,16 @@ def postauthGoodVars(request):
 
     inputJSON = getJson(request)
 
-    app.logger.debug( "postauth postauthGoodVars() request json '{0}'".format(json_dumps(inputJSON)) )
+    logIt( app.logger.debug, DEB_PREFIX, 'request json', json_dumps(inputJSON) )
 
     for POSTVarName in POSTVarsNames:
         POSTVarValue = inputJSON.get(POSTVarName, None)
-        if not POSTVarValue: #or not formatOk('postauthGoodVars', POSTVarName, POSTVarValue):
-            app.logger.warning( "postauth postauthGoodVars() input var '{0}' check failed".format(POSTVarName) )
+        if not POSTVarValue:
+            logIt( app.logger.warning, DEB_PREFIX, 'input var {0} check failed'.format(POSTVarName) )
             result = False
             break
 
-    app.logger.debug( "postauth postauthGoodVars() returns '{0}'".format(result) )
+    logIt( app.logger.debug, DEB_PREFIX, 'returns', result )
 
     return result
 

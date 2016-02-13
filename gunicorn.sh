@@ -2,6 +2,8 @@
 
 log_level=`printenv WSGI_LOG_LEV` 
 workers=`printenv WSGI_WORKERS`
+#file logging temporary switch. should be removed while in production use.
+export LOG_TO_FILE=1
 #cert=`printenv TLS_CERT`
 #key=`printenv TLS_KEY`
 echo "starting gunicorn with $workers threads"
