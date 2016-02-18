@@ -7,7 +7,7 @@ from datetime import date
 from psycopg2 import connect, Error as pgError
 from json import loads as json_loads, dumps as json_dumps
 from inspect import stack
-from model import *
+#from model import *
 
 MAC_REGEXP = r'^([0-9a-fA-F][0-9a-fA-F][:-]){5}([0-9a-fA-F][0-9a-fA-F])$'
 SN_REGEXP = r'([0-9a-fA-F]){12}'
