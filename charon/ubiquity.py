@@ -4,48 +4,13 @@ from misc import *
 from urllib2 import URLError, HTTPError
 from ssl import SSLError
 from time import sleep
+import urllib
 
 UBIQUITY_VARS = ['id', 'ap','url']
 DEB_PREFIX = 'ubiquity'
 
 """
-LEGACY. should be removed
-Client enters the systems at this point. His POST request contains
-IN
-    client_id: str (as a MAC)
-    hotspot_id: str (as a MAC)
-    entrypoint_id: str (as a MAC)
-    original_url: str
-    hotspot_login_url: str
-OUT 
-    str
-"""
-#@app.route("/ubiquity/", methods=['GET'])
-def doUbiquityRedirect():
-    getVarNames = UBIQUITY_VARS   
-
-    result = None
-
-    templateData = {}
-
-    app.logger.debug( "preauth doUbiquityRedirect() GET params {0} ".format(request.args) )        
-    
-    templateData['client_id'] = request.args.get('id')
-    templateData['hotspot_id'] = request.args.get('ap')
-    templateData['entrypoint_id'] = templateData['hotspot_id']
-    templateData['original_url'] = request.args.get('url')
-    templateData['hotspot_login_url'] = templateData['original_url']
-    templateData['url'] = 'https://charon.zerothree.su/preauth/' 
-    
-    session['hotspot_type'] = 'ubiquity'
-    app.logger.debug("doUbiquityRedirect() session {0}".format( session.get('hotspot_type') ) )
-    
-    result = render_template('ubiquity.html', template_data = templateData)
-    return result
-
-
-"""
-The func checks whether hotspot is Ubiquity. The hotspot is ubiquity if shopster sends us bunch of parameters: 
+The func checks whether hotspot is Ubiquity or not at a postauth stage. The hotspot is ubiquity if shopster sends us a bunch of parameters: 
 controller_address, controller_port, controller_user, controller_password
 IN
     request: Flask.Request
@@ -72,15 +37,18 @@ def isUbiquity(request):
 
     return result
 
+"""
+Slightly modified unify API main class. It supports API request timeout.
+"""
 from unifi.controller import Controller, PYTHON_VERSION
-  
+
 class Ubnt(Controller):
-
     def _login(self, version):
-        #app.logger.debug('Ubnt _login() as %s', self.username)
-
         params = {'username': self.username, 'password': self.password}
+    #        params = {'username': 'admin', 'password': 'lobster'}
         login_url = self.url
+
+        logIt( app.logger.debug, DEB_PREFIX, 'unify login {0} {1}'.format( params, self.url ) )
 
         if version is 'v4':
             login_url += 'api/login'
@@ -98,10 +66,8 @@ class Ubnt(Controller):
 
         self.opener.open( login_url, params, timeout = app.config.get('UBNT_CONN_TO') ).read()
 
-    def _logout(self):
-        #app.logger.debug('Ubnt._logout()')
+    def _logout(self):        
         self.opener.open( self.url + 'logout', timeout = app.config.get('UBNT_CONN_TO') ).read()
-
 
 """
 The func authorizes a user at Ubiquity hotspot by API.
@@ -130,11 +96,14 @@ def allowUbiquitySubs(request):
         return result        
 
     try:
+        logIt( app.logger.debug, DEB_PREFIX, '{0} {1} {2} {3} {4}'.format ( cAddr, cUser, cPass, cPort, cVersion ) )
         c = Ubnt(cAddr, cUser, cPass, port=cPort, version=cVersion)
+        logIt( app.logger.error, DEB_PREFIX, 'after init' )
         c.authorize_guest(userName, sessionTimeout, byte_quota = traffLimit)
         c._logout()
         result = True
-    except ( URLError, HTTPError, SSLError ):
+    except ( URLError, HTTPError, SSLError ) as e:
+        logIt( app.logger.debug, DEB_PREFIX, str( e ) )
         result = False        
 
     logIt( app.logger.debug, DEB_PREFIX, 'returns', result )

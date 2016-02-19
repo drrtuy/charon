@@ -6,7 +6,6 @@ from psycopg2 import connect, Error as pgError
 from json import loads as json_loads, dumps as json_dumps
 from inspect import stack
 from misc import formatOk, genPass, idleCheck, getPreauthTemplateData, getPreauthModel, logIt 
-from ubiquity import doUbiquityRedirect
 
 POST_MAIN_VARS = ['client_id', 'hotspot_id', 'entrypoint_id']
 MT_PREAUTH_VARS = POST_MAIN_VARS + ['hotspot_login_url']
@@ -78,7 +77,7 @@ def preauthGoodVars(request):
     POSTVarsNames = session.get( 'POSTVarsNames', None )
     for POSTVarName in POSTVarsNames:
             POSTVarValue = request.values.get(POSTVarName, None)            
-            if not POSTVarValue:
+            if POSTVarValue == None:
                 logIt( app.logger.warning, DEB_PREFIX, ' input var {0} check failed'.format( POSTVarName) )
                 return result
     if len( POSTVarsNames ):
@@ -98,8 +97,6 @@ OUT
 #change userMAC to userID
 def doSaveSessionData(request):
 
-    logIt ( app.logger.debug, DEB_PREFIX, ' request args ', request.values.to_dict(flat = False) ) 
-    
     result = False
 
     h = app.config.get('DB_HOST')
@@ -107,7 +104,14 @@ def doSaveSessionData(request):
     u = app.config.get('DB_USER') 
     p = app.config.get('DB_PASS')
 
-    model = getPreauthModel(request)
+#   model = getPreauthModel(request)
+    model = session.get( 'model' )
+    logIt ( app.logger.debug, DEB_PREFIX, 'normalized args from model', model ) 
+
+    if model == None:
+        logIt( app.logger.error, DEB_PREFIX, 'model is empty')
+        logIt( app.logger.debug, DEB_PREFIX, 'result', result )
+        return result
 
     userMAC = userName = model.get('client_id', None)
     hotspotID = model.get('hotspot_id', None)
@@ -117,8 +121,11 @@ def doSaveSessionData(request):
     passWord = genPass()
     
     if None in ( userName, passWord, hotspotID, entrypointID, originalURL, hotspotLoginURL ):
+        logIt( app.logger.error, DEB_PREFIX, 'not enough data in the model')
+        logIt( app.logger.debug, DEB_PREFIX, 'result', result )
         return result
 
+    # Future db upserts depend on data we upsert now. So we commit after the first chunk.    
     try:
         c = connect(host = h, user = u, password = p, database = d)
         cursor = c.cursor()
@@ -171,7 +178,7 @@ def doSaveSessionData(request):
     finally:
         c.close()
 
-    logIt( app.logger.error, DEB_PREFIX, 'result', result )
+    logIt( app.logger.debug, DEB_PREFIX, 'result', result )
 
     return result
 
@@ -209,32 +216,28 @@ def doPreauth():
     session['POSTVarsNames'] = POSTVarsNames    
 
     varsOk = preauthGoodVars(request) 
+    session['model'] = getPreauthModel(request)        #getPreauthModel
 
     if hotspotType is not None:        
         waitTime = idleCheck(request)
         
         if waitTime != False and waitTime:
             extradata = {'wait_time': waitTime}
-            result = render_template('preauth_idle.html', extradata = extradata)
-            r = make_response( result )
-            r.headers['Strict-Transport-Security'] = 'max-age=0'
-            return r
+            logIt( app.logger.debug, DEB_PREFIX, 'render idle template' )
+            return render_template('preauth_idle.html', extradata = extradata)
 
-        if not doSaveSessionData(request):    
-            result = render_template('error.html') 
-            return result
+        if doSaveSessionData(request) != True:
+            logIt( app.logger.debug, DEB_PREFIX, 'Can\'t save session. Render error template' )    
+            return render_template('error.html') 
 
-        session['model'] = getPreauthTemplateData(request)        
         extradata = session['model']
-
-        result = render_template('preauth.html', extradata = extradata, url = app.config.get('SHOPSTER_URL'))
-        r = make_response( result )
-        r.headers['Strict-Transport-Security'] = 'max-age=0'
-        return r
+        logIt( app.logger.debug, DEB_PREFIX, 'OK. Render preauth template' )
+        return render_template('preauth.html', extradata = extradata, url = app.config.get('SHOPSTER_URL'))
 
     elif varsOk:                                #didnt get hotspot type and vars are ok then shopster system is down
+        logIt( app.logger.debug, DEB_PREFIX, 'Auth service is down. Render outage template' )
         result = render_template('shopster_outage.html')
         return result
-    
-    result = render_template('error.html')
-    return result
+
+    logIt( app.logger.debug, DEB_PREFIX, 'Default exit. Render error template' )    
+    return render_template('error.html')

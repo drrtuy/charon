@@ -75,7 +75,7 @@ def updateSessionLimits(request):
     traffLimit = extractTraffLimit(request)
 
     if None in ( clientID, idleTime, authType, hotspotID, sessionLimit, traffLimit):
-        logIt( app.logger.debug, DEB_PREFIX, 'client {0}, idle {1}, authtype {2}, hotspot {3} TO {4} traff {5}'.format(\
+        logIt( app.logger.error, DEB_PREFIX, 'Not enough data. client {0}, idle {1}, authtype {2}, hotspot {3} TO {4} traff {5}'.format(\
             clientID, idleTime, authType, hotspotID, sessionLimit, traffLimit )
         )
         logIt( app.logger.debug, DEB_PREFIX, 'returns', result )
@@ -97,10 +97,10 @@ def updateSessionLimits(request):
  clientID, hotspotID)
         )
         c.commit()
-        c.close()
         result = True
     except pgError as e:
         logIt( app.logger.error, DEB_PREFIX, 'database exception', str(e) )
+    finally:
         c.close()
 
     logIt( app.logger.debug, DEB_PREFIX, 'returns', result )
@@ -131,7 +131,7 @@ def allowRadiusSubs(request):
     traffLimit = extractTraffLimit(request)
 
     if None in (userName, passWord, sessionTimeout, traffLimit):
-        logIt( app.logger.debug, DEB_PREFIX, 'userName {0}, pass {1}, TO {2}, traff {3}'.format( userName, passWord, sessionTimeout, traffLimit)
+        logIt( app.logger.error, DEB_PREFIX, 'Not enough data. userName {0}, pass {1}, TO {2}, traff {3}'.format( userName, passWord, sessionTimeout, traffLimit)
         )
         logIt( app.logger.debug, DEB_PREFIX, 'returns', result )
         return result
@@ -174,11 +174,10 @@ def allowRadiusSubs(request):
         )
 
         c.commit()
-        c.close()
-
         result = True
     except pgError as e:
         logIt( app.logger.error, DEB_PREFIX, 'database exception', str(e) )
+    finally:
         c.close()
 
     logIt( app.logger.debug, DEB_PREFIX, 'returns', result )
@@ -202,8 +201,8 @@ def postauthGoodVars(request):
 
     for POSTVarName in POSTVarsNames:
         POSTVarValue = inputJSON.get(POSTVarName, None)
-        if not POSTVarValue:
-            logIt( app.logger.warning, DEB_PREFIX, 'input var {0} check failed'.format(POSTVarName) )
+        if POSTVarValue == None:
+            logIt( app.logger.error, DEB_PREFIX, 'input var {0} check failed'.format(POSTVarName) )
             result = False
             break
 

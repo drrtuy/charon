@@ -7,7 +7,6 @@ from datetime import date
 from psycopg2 import connect, Error as pgError
 from json import loads as json_loads, dumps as json_dumps
 from inspect import stack
-#from model import *
 
 DEB_PREFIX='postpostauth'
 
@@ -27,14 +26,14 @@ def getFormData(request):
     d = app.config.get('DB_NAME')
     u = app.config.get('DB_USER') 
     p = app.config.get('DB_PASS')
-      
-    model = session.get('model')
-    clientID = model.get('client_id')
-    hotspotID = model.get('hotspot_id')
 
     result = None
+      
+    model = session.get('model')
+    logIt ( app.logger.debug, DEB_PREFIX, 'normalized args from model', model )
 
-    logIt( app.logger.debug, DEB_PREFIX, 'request args', request.values.to_dict(flat = False) )
+    clientID = model.get('client_id')
+    hotspotID = model.get('hotspot_id')
 
     if None in ( clientID, hotspotID):
         logIt( app.logger.debug, DEB_PREFIX, 'returns', result )
@@ -43,6 +42,7 @@ def getFormData(request):
     try:
         c = connect(host = h, user = u, password = p, database = d)
         cursor = c.cursor()
+        """
         a = cursor.mogrify( 'SELECT DISTINCT a.username, a.password, u.origin_url, u.hotspot_login_url, l.session_hash\
              FROM charon_authentication a, charon_urls u, charon_limits l \
              WHERE a.client_id = u.client_id \
@@ -53,31 +53,40 @@ def getFormData(request):
             (clientID, hotspotID),
         )
         print a
+        """
         cursor.execute( 'SELECT DISTINCT a.username, a.password, u.origin_url, u.hotspot_login_url, l.session_hash\
              FROM charon_authentication a, charon_urls u, charon_limits l \
              WHERE a.client_id = u.client_id \
              AND l.client_id = u.client_id \
              AND u.client_id = %s \
              AND a.hotspot_id = u.hotspot_id \
+             AND l.hotspot_id = u.hotspot_id \
              AND u.hotspot_id = %s; ', 
             (clientID, hotspotID),
         )
+        """
+        cursor.execute( 'SELECT * FROM charon_postauth_getformdata(%s,%s) as (a varchar,b varchar,c varchar,d varchar,e varchar);'
+            (clientID, hotspotID),
+        )
+        """
         row = cursor.fetchone()
         if not row:
             c.close()
             result = None
+            logIt( app.logger.error, DEB_PREFIX, 'session data not found', result )
             logIt( app.logger.debug, DEB_PREFIX, 'returns', result )
             return result
+
         result = {}
         (result['username'], result['password'],\
         result['origin_url'], result['hotspot_login_url'], result['session_hash']) \
         = row 
         c.close()
         
-        #URL for redirection into shopster
+        #redirect URL crafting
         st =  '{0}?session_hash={1}&origin_url={2}'.format(\
             app.config.get('POSTPOSTAUTH_URL'), result['session_hash'], result['origin_url']\
-        )
+        ) 
     
         result['origin_url'] = st
 
@@ -124,9 +133,12 @@ def doPostPostauth():
     if waitTime != False and waitTime:
         extradata = {'wait_time': waitTime}
         return render_template('postpostauth_idle.html', extradata = extradata)            
-    
-    formData = getFormData(request)
+
     model = session.get('model', None)
+    
+    #if model != None
+    formData = getFormData(request)
+
 
     if None not in ( formData, model ) and idleCheck(request) == 0:
         if hotspotType == 'mikrotik':            
@@ -165,4 +177,4 @@ def doPostPostauth():
                 r.headers['Strict-Transport-Security'] = 'max-age=0'
                 return r                
  
-        return render_template('error.html')
+    return render_template('error.html')

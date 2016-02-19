@@ -7,6 +7,7 @@ from datetime import date
 from psycopg2 import connect, Error as pgError
 from json import loads as json_loads, dumps as json_dumps
 from inspect import stack
+from itertools import cycle
 #from model import *
 
 MAC_REGEXP = r'^([0-9a-fA-F][0-9a-fA-F][:-]){5}([0-9a-fA-F][0-9a-fA-F])$'
@@ -21,6 +22,10 @@ POST_PPOSTAUTH_VARS = POST_MAIN_VARS
 FREERAD_ADD_OP = r'+='
 MB=1048576
 DEB_PREFIX = 'misc'
+
+def xorString(message, key):
+    cyphered = ''.join( chr (ord(c) ^ ord(k) ) for c,k in zip(message, cycle(key) ) )
+    return cyphered
 
 """
 Project logger wrapper.
@@ -62,6 +67,7 @@ def genPass():
     return 'aeChei3A'
 
 """
+LEGACY. SHOULD BE REMOVED
 Method checks variable for correctness in a particular function.
 IN
     fname: str
@@ -198,9 +204,7 @@ OUT
 """
 def getPreauthModel(request):
 
-    (u, u, u, currFuncName, u, u) = stack()[0]
-    app.logger.debug( '{0} {1}() request args {2}'.format(DEB_PREFIX, currFuncName, request.values.to_dict(flat = False) ) )
-
+    logIt ( app.logger.debug, DEB_PREFIX, ' request args ', request.values.to_dict(flat = False) ) 
     result = {}
 
     POSTVarsNames = session.get('POSTVarsNames', [] )
@@ -231,7 +235,7 @@ def getPreauthModel(request):
         result['hotspot_login_url'] = request.args.get('sip')
         result['uip'] = request.args.get('uip')
     elif hotspotType == 'openwrt':
-        result = Ruckus()
+        #result = Ruckus()
         result['client_id'] = request.args.get('mac')
         result['hotspot_id'] = request.args.get('called')
         result['entrypoint_id'] = result['hotspot_id']
@@ -239,8 +243,7 @@ def getPreauthModel(request):
         result['hotspot_login_url'] = request.args.get('uamip')
         result['uamport'] = request.args.get('uamport')        
 
-    app.logger.debug("misc getPreauthModel() returns {0}".format( json_dumps(result) ) )
-    
+    logIt( app.logger.error, DEB_PREFIX, 'result', result )    
     return result 
 
 getPreauthTemplateData = getPreauthModel
@@ -270,27 +273,24 @@ def idleCheck(request):
     d = app.config.get('DB_NAME')
     u = app.config.get('DB_USER') 
     p = app.config.get('DB_PASS')
-   
-    if request.form:
-        app.logger.debug( "misc idleCheck() request POST data {0}".format(json_dumps(request.form)) )
-
-    #print "idleCheck", request.form
 
     if isJson(request):        
+        logIt ( app.logger.debug, DEB_PREFIX, 'json request args ', request.values.to_dict(flat = False) )   
         clientID = extractClientID(request)
         hotspotID = extractHotspotID(request)
         entrypointID = extractEntryPointID(request)
-        #print("\njson {0} {1} {2}".format(clientID, hotspotID, entrypointID) )
     else:
-        clientID = request.values.get('client_id', None)
-        hotspotID = request.values.get('hotspot_id', None)
-        entrypointID = request.values.get('entrypoint_id', None)
-        #print("\nform {0} {1} {2}".format(clientID, hotspotID, entrypointID) )  
+        model = session.get( 'model' )
+        logIt ( app.logger.debug, DEB_PREFIX, 'normalized args from model', model )   
+        clientID = model.get('client_id', None)
+        hotspotID = model.get('hotspot_id', None)
+        entrypointID = model.get('entrypoint_id', None)
 
     result = False   
     
-    if not clientID or not hotspotID or not entrypointID:
-        app.logger.debug( "misc idleCheck() returns {0}".format(result) )
+    if None in ( clientID, hotspotID, entrypointID ):
+        logIt ( app.logger.error, DEB_PREFIX, 'bad args' )   
+        logIt( app.logger.debug, DEB_PREFIX, 'result', result )    
         return result
 
     try:        
@@ -324,18 +324,16 @@ def idleCheck(request):
         ) 
         """
         row = cursor.fetchone()
-        #print "idleCheck row", row
         if not row:
             waitTime = 0
         else:
             (waitTime,) = row
-        #app.logger.debug( "misc idleCheck() returns {0}".format(waitTime) )    
         result = waitTime
     except pgError as e:
-        app.logger.error("misc idleCheck() " + str(e))
+        logIt( app.logger.error, DEB_PREFIX, 'database exception', str(e) )
     finally:
         c.close()
 
-    app.logger.debug( "misc idleCheck() returns {0}".format(result) )
+    logIt( app.logger.debug, DEB_PREFIX, 'result', result )
 
     return result
