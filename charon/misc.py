@@ -241,7 +241,8 @@ def getPreauthModel(request):
         result['entrypoint_id'] = result['hotspot_id']
         result['original_url'] = request.args.get('userurl')
         result['hotspot_login_url'] = request.args.get('uamip')
-        result['uamport'] = request.args.get('uamport')        
+        result['uamport'] = request.args.get('uamport')
+        result['challenge'] = request.args.get('challenge')
 
     logIt( app.logger.error, DEB_PREFIX, 'result', result )    
     return result 

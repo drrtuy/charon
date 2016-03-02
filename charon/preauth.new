@@ -52,8 +52,6 @@ def getHotspotType(request):
         result = 'ruckus'
     elif h_id == '90-F6-52-5B-73-F4':
         result = 'openwrt'
-    elif h_id == '00:10:FF:01:BE:5D':
-        result = 'cisco'
     elif h_id != None and request.method == 'POST':
         result = 'mikrotik'
 

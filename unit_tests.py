@@ -306,7 +306,7 @@ content_type = 'application/json')
 
     def test_allow_ubiquity_subs(self):
         fixt = []
-        fixt.append( {"auth_type": "splash", "hotspot_id": "44:d9:e7:48:81:63", "controller_address": "95.213.200.85", "client_id": "24:0a:64:94:a3:a1", "traffic_limit": "77", "controller_password": "lobster", "entrypoint_id": "44:d9:e7:48:81:63", "session_timeout": "600", "next_conn_in": "120", "controller_user": "admin", "session_hash": "qweqweqweqwe", "controller_port": "8443"}
+        fixt.append( {"auth_type": "splash", "hotspot_id": "44:d9:e7:48:81:63", "controller_address": "95.213.200.85", "client_id": "	d0:53:49:de:8b:03", "traffic_limit": "77", "controller_password": "lobster", "entrypoint_id": "44:d9:e7:48:81:63", "session_timeout": "600", "next_conn_in": "120", "controller_user": "admin", "session_hash": "qweqweqweqwe", "controller_port": "8443"}
         )
         fixt.append( {"auth_type": "splash", "hotspot_id": "44:d9:e7:48:81:63", "client_id": "24:0a:64:94:a3:a1", "traffic_limit": "77", "controller_password": "lobster", "entrypoint_id": "44:d9:e7:48:81:63", "session_timeout": "600", "next_conn_in": "120", "controller_user": "admin", "session_hash": "qweqweqweqwe", "controller_port": "8443"}
         )

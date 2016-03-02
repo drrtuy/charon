@@ -80,8 +80,7 @@ def updateSessionLimits(request):
         )
         logIt( app.logger.debug, DEB_PREFIX, 'returns', result )
         return result
-
-
+    
     try:
         c = connect(host = h, user = u, password = p, database = d)
         cursor = c.cursor()
@@ -228,12 +227,15 @@ OUT
 def doPostauth():
 
     if not authenticated(request):
+        logIt( app.logger.debug, DEB_PREFIX, 'Can\'t authenticate the request.' )
         return json.jsonify(auth = 'fail', result = 'fail')
 
     if isJson(request) and postauthGoodVars(request):
         if isUbiquity(request) and allowUbiquitySubs(request) and updateSessionLimits(request):
+            logIt( app.logger.debug, DEB_PREFIX, 'OK. Unify request was served.' )
             return json.jsonify(auth = 'ok', result = 'ok')
-        elif allowRadiusSubs(request) and updateSessionLimits(request):        
+        elif allowRadiusSubs(request) and updateSessionLimits(request):   
+            logIt( app.logger.debug, DEB_PREFIX, 'OK. Request was served.' )     
             return json.jsonify(auth = 'ok', result = 'ok')
-        
+        logIt( app.logger.debug, DEB_PREFIX, 'Error exit. Request wasn\'t served.' )     
     return json.jsonify(auth = 'ok', result = 'fail')

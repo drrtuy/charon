@@ -6,11 +6,12 @@ from hashlib import sha256
 from datetime import date
 from psycopg2 import connect, Error as pgError
 from json import loads as json_loads, dumps as json_dumps
-from inspect import stack
+#from inspect import stack
+from urllib import pathname2url as percentEncode
 
 DEB_PREFIX='postpostauth'
 
-from misc import formatOk, idleCheck, logIt
+from misc import formatOk, idleCheck, logIt, xorString
 
 #########################postpostauth
 
@@ -42,33 +43,11 @@ def getFormData(request):
     try:
         c = connect(host = h, user = u, password = p, database = d)
         cursor = c.cursor()
-        """
-        a = cursor.mogrify( 'SELECT DISTINCT a.username, a.password, u.origin_url, u.hotspot_login_url, l.session_hash\
-             FROM charon_authentication a, charon_urls u, charon_limits l \
-             WHERE a.client_id = u.client_id \
-             AND l.client_id = u.client_id \
-             AND u.client_id = %s \
-             AND a.hotspot_id = u.hotspot_id \
-             AND u.hotspot_id = %s; ', 
+      
+        cursor.execute( 'SELECT * FROM charon_postauth_getformdata(%s,%s) as (a varchar,b varchar,c varchar,d varchar,e varchar);',\
             (clientID, hotspotID),
         )
-        print a
-        """
-        cursor.execute( 'SELECT DISTINCT a.username, a.password, u.origin_url, u.hotspot_login_url, l.session_hash\
-             FROM charon_authentication a, charon_urls u, charon_limits l \
-             WHERE a.client_id = u.client_id \
-             AND l.client_id = u.client_id \
-             AND u.client_id = %s \
-             AND a.hotspot_id = u.hotspot_id \
-             AND l.hotspot_id = u.hotspot_id \
-             AND u.hotspot_id = %s; ', 
-            (clientID, hotspotID),
-        )
-        """
-        cursor.execute( 'SELECT * FROM charon_postauth_getformdata(%s,%s) as (a varchar,b varchar,c varchar,d varchar,e varchar);'
-            (clientID, hotspotID),
-        )
-        """
+
         row = cursor.fetchone()
         if not row:
             c.close()
@@ -139,42 +118,43 @@ def doPostPostauth():
     #if model != None
     formData = getFormData(request)
 
-
     if None not in ( formData, model ) and idleCheck(request) == 0:
-        if hotspotType == 'mikrotik':            
-            return render_template('postpostauth.html', formdata = formData)
+        if hotspotType == 'mikrotik':
+            logIt( app.logger.debug, DEB_PREFIX, 'OK. Render mikrotik template' )            
+            return render_template('postpostauth_mikrotik.html', formdata = formData)
 
         if hotspotType == 'aruba':
+            logIt( app.logger.debug, DEB_PREFIX, 'OK. Render aruba template' )
             return render_template('postpostauth_aruba.html', formdata = formData)
 
         if hotspotType == 'openwrt':
+            hashedPass = xorString( formData.get('password'), model.get('challenge') )
             url = 'http://{0}:{1}/logon?username={2}&password={3}'.format( 
                 formData.get('hotspot_login_url'), model.get('uamport'),
-                formData.get('username'), formData.get('password')
+                formData.get('username'), percentEncode( hashedPass )
             )
+            #logIt( app.logger.debug, DEB_PREFIX, 'xored pass is {0}'.format( repr( hashedPass ) ) )
+            logIt( app.logger.debug, DEB_PREFIX, 'OK. Render openwrt template' )
             return render_template('postpostauth_openwrt.html', url = url ) 
 
         if hotspotType == 'ubiquity':
+            logIt( app.logger.debug, DEB_PREFIX, 'OK. Render ubiquity template' )
             return render_template('postpostauth_ubiquity.html', url = formData.get('origin_url') )           
 
         if hotspotType == 'ruckus' and not session.get('zone_director_passed'):
-                r = make_response( 
-                    render_template('postpostauth_ruckus.html',\
-                       url = 'http://{0}:9997/login?username={1}&password={2}'.format( formData.get('hotspot_login_url'), 
-                        formData.get('username'), formData.get('password') )
-                    ) 
-                )
-                #dev server header. should be removed
-                r.headers['Strict-Transport-Security'] = 'max-age=0'
-                session['zone_director_passed'] = True
-                return r                
+            logIt( app.logger.debug, DEB_PREFIX, 'OK. Render ruckus intermediate template' )
+            return render_template('postpostauth_ruckus.html',\
+               url = 'http://{0}:9997/login?username={1}&password={2}'.format( formData.get('hotspot_login_url'), 
+                formData.get('username'), formData.get('password') )
+            )
+               
         elif hotspotType == 'ruckus':
-                session['zone_director_passed'] = False                   
-                r = make_response( 
-                        render_template( 'postpostauth_ruckus.html', url = formData.get('origin_url') ) 
-                )
-                #dev server header. should be removed
-                r.headers['Strict-Transport-Security'] = 'max-age=0'
-                return r                
+            session['zone_director_passed'] = False                   
+            r = make_response( 
+                    render_template( 'postpostauth_ruckus.html', url = formData.get('origin_url') ) 
+            )
+            logIt( app.logger.debug, DEB_PREFIX, 'OK. Render ruckus intermediate template' )
+            return r                
+    logIt( app.logger.debug, DEB_PREFIX, 'Default exit. Render error template' )    
  
     return render_template('error.html')

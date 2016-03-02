@@ -50,7 +50,7 @@ class Ubnt(Controller):
 
         logIt( app.logger.debug, DEB_PREFIX, 'unify login {0} {1}'.format( params, self.url ) )
 
-        if version is 'v4':
+        if version == 'v4':
             login_url += 'api/login'
             params = json.dumps(params)
         else:
@@ -63,8 +63,9 @@ class Ubnt(Controller):
 
         if PYTHON_VERSION is 3:
             params = params.encode("UTF-8")
-
-        self.opener.open( login_url, params, timeout = app.config.get('UBNT_CONN_TO') ).read()
+        logIt( app.logger.debug, DEB_PREFIX, "Ubnt _login() {0} {1}".format( login_url, params ) )
+        d = self.opener.open( login_url, params, timeout = app.config.get('UBNT_CONN_TO') ).read()
+        #logIt( app.logger.debug, DEB_PREFIX, "Ubnt _login() urllib return value {0}".format( d ) )
 
     def _logout(self):        
         self.opener.open( self.url + 'logout', timeout = app.config.get('UBNT_CONN_TO') ).read()
@@ -96,10 +97,11 @@ def allowUbiquitySubs(request):
         return result        
 
     try:
-        logIt( app.logger.debug, DEB_PREFIX, '{0} {1} {2} {3} {4}'.format ( cAddr, cUser, cPass, cPort, cVersion ) )
+        #logIt( app.logger.debug, DEB_PREFIX, '{0} {1} {2} {3} {4}'.format ( cAddr, cUser, cPass, cPort, cVersion ) )
         c = Ubnt(cAddr, cUser, cPass, port=cPort, version=cVersion)
         logIt( app.logger.error, DEB_PREFIX, 'after init' )
-        c.authorize_guest(userName, sessionTimeout, byte_quota = traffLimit)
+        d = c.authorize_guest(userName, sessionTimeout, byte_quota = traffLimit)
+        #logIt( app.logger.error, DEB_PREFIX, 'after auth {0}'.format(d) )
         c._logout()
         result = True
     except ( URLError, HTTPError, SSLError ) as e:
