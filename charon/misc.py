@@ -243,6 +243,12 @@ def getPreauthModel(request):
         result['hotspot_login_url'] = request.args.get('uamip')
         result['uamport'] = request.args.get('uamport')
         result['challenge'] = request.args.get('challenge')
+    elif hotspotType == 'cisco':
+        result['client_id'] = request.args.get('mac')
+        result['hotspot_id'] = request.args.get('ap')
+        result['entrypoint_id'] = result['hotspot_id']
+        result['original_url'] = request.args.get('url')
+        result['hotspot_login_url'] = request.args.get('logonurl')
 
     logIt( app.logger.error, DEB_PREFIX, 'result', result )    
     return result 

@@ -1,15 +1,14 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title></title>
+<meta charset="utf-8">
 </head>
-<body>
 
+<body>
 <form name="login" action="{{ formdata.hotspot_login_url }}" method="post" >
 <input type="hidden" name="url" value="{{ formdata.origin_url }}" />
 <input name="user" type="hidden" value="{{ formdata.username }}"/>
 <input name="password" type="hidden" value="{{ formdata.password }}"/>
-<input type="hidden" name="cmd" value="authenticate">
 <input type="hidden" name="mac" value="{{ formdata.username }}">
 </form>
 

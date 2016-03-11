@@ -8,6 +8,8 @@ from psycopg2 import connect, Error as pgError
 from json import loads as json_loads, dumps as json_dumps
 #from inspect import stack
 from urllib import pathname2url as percentEncode
+from binascii import hexlify, unhexlify
+from hashlib import md5
 
 DEB_PREFIX='postpostauth'
 
@@ -128,18 +130,25 @@ def doPostPostauth():
             return render_template('postpostauth_aruba.html', formdata = formData)
 
         if hotspotType == 'openwrt':
-            hashedPass = xorString( formData.get('password'), model.get('challenge') )
+            openwrtSecret = app.config.get('OPENWRT_SECRET_KEY')
+            #md5 digest of a concatenated challenge sent by chilli and chilli uamsecret setting.              
+            challWithSecret =  md5( '{}{}'.format( model.get('challenge'), openwrtSecret ) ).digest()
+            xoredPass = xorString( formData.get('password'), challWithSecret )
             url = 'http://{0}:{1}/logon?username={2}&password={3}'.format( 
                 formData.get('hotspot_login_url'), model.get('uamport'),
-                formData.get('username'), percentEncode( hashedPass )
+                formData.get('username'), percentEncode( xoredPass )
             )
-            #logIt( app.logger.debug, DEB_PREFIX, 'xored pass is {0}'.format( repr( hashedPass ) ) )
+            logIt( app.logger.debug, DEB_PREFIX, 'xored pass is {0}'.format( repr( xoredPass ) ) )
             logIt( app.logger.debug, DEB_PREFIX, 'OK. Render openwrt template' )
             return render_template('postpostauth_openwrt.html', url = url ) 
 
         if hotspotType == 'ubiquity':
             logIt( app.logger.debug, DEB_PREFIX, 'OK. Render ubiquity template' )
             return render_template('postpostauth_ubiquity.html', url = formData.get('origin_url') )           
+
+        if hotspotType == 'cisco':
+            logIt( app.logger.debug, DEB_PREFIX, 'OK. Render cisco template' )
+            return render_template('postpostauth_cisco.html', formdata = formData )
 
         if hotspotType == 'ruckus' and not session.get('zone_director_passed'):
             logIt( app.logger.debug, DEB_PREFIX, 'OK. Render ruckus intermediate template' )

@@ -11,4 +11,6 @@ DB_NAME = environ.get('DB_NAME')
 #from logging import DEBUG as LOG_LEV_DEBUG
 APP_LOG_LEVEL = environ.get('APP_LOG_LEV')
 SECRET_KEY = 'ech5haisho8Ohri'
+OPENWRT_SECRET_KEY = 'shopster'
 UBNT_CONN_TO = 2
+
