@@ -136,7 +136,7 @@ def doPostPostauth():
             challWithSecret =  md5( '{}{}'.format( model.get('challenge'), openwrtSecret ) ).digest()
             passLen = len( formData.get('password') )
             #16 bytes aligned password
-            alignedPass = formData.get('password').join( '\x00' * ( HASH_LEN - passLen ) )
+            alignedPass = '{}{}'.format ( formData.get('password'), '\x00' * ( HASH_LEN - passLen ) ) 
             xoredPass = xorString( alignedPass, challWithSecret )
             url = 'http://{0}:{1}/logon?username={2}&password={3}'.format( 
                 formData.get('hotspot_login_url'), model.get('uamport'),
