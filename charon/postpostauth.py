@@ -132,8 +132,9 @@ def doPostPostauth():
 
         if hotspotType == 'openwrt':
             openwrtSecret = app.config.get('OPENWRT_SECRET_KEY')
+            challAsBinString = unhexlify( model.get('challenge') )
             #md5 digest of a concatenated challenge sent by chilli and chilli uamsecret setting.              
-            challWithSecret =  md5( '{}{}'.format( model.get('challenge'), openwrtSecret ) ).digest()
+            challWithSecret =  md5( '{}{}'.format( challAsBinString, openwrtSecret ) ).digest()
             passLen = len( formData.get('password') )
             #16 bytes aligned password
             alignedPass = '{}{}'.format( formData.get('password'), '\x00' * ( HASH_LEN - passLen ) )            
@@ -142,8 +143,9 @@ def doPostPostauth():
                 formData.get('hotspot_login_url'), model.get('uamport'),
                 formData.get('username'), hexlify( xoredPass )
             )
-            logIt( app.logger.debug, DEB_PREFIX, 'aligned pass is {0}'.format( hexlify( alignedPass ) ) )
-            logIt( app.logger.debug, DEB_PREFIX, 'xored pass is {0}'.format( hexlify( xoredPass ) ) )
+            logIt( app.logger.debug, DEB_PREFIX, 'challWithSecret is {}'.format( hexlify( challWithSecret ) ) )
+            logIt( app.logger.debug, DEB_PREFIX, 'aligned pass is {}'.format( hexlify( alignedPass ) ) )
+            logIt( app.logger.debug, DEB_PREFIX, 'xored pass is {}'.format( hexlify( xoredPass ) ) )
             logIt( app.logger.debug, DEB_PREFIX, 'OK. Render openwrt template' )
             return render_template('postpostauth_openwrt.html', url = url ) 
 
