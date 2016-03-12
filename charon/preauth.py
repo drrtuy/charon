@@ -234,7 +234,7 @@ def doPreauth():
 
         extradata = session['model']
         logIt( app.logger.debug, DEB_PREFIX, 'OK. Render preauth template' )
-        return render_template('preauth.html', extradata = extradata, url = app.config.get('SHOPSTER_URL'))
+        return render_template('preauth.html', extradata = extradata, url = app.config.get('SHOPSTER_URL'), hotspottype = hotspotType )
 
     elif varsOk:                                #didnt get hotspot type and vars are ok then shopster system is down
         logIt( app.logger.debug, DEB_PREFIX, 'Auth service is down. Render outage template' )

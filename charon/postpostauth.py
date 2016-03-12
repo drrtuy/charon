@@ -133,10 +133,12 @@ def doPostPostauth():
             openwrtSecret = app.config.get('OPENWRT_SECRET_KEY')
             #md5 digest of a concatenated challenge sent by chilli and chilli uamsecret setting.              
             challWithSecret =  md5( '{}{}'.format( model.get('challenge'), openwrtSecret ) ).digest()
-            xoredPass = xorString( formData.get('password'), challWithSecret )
+            passLen = len( formData.get('password') )
+            alignedPass = formData.get('password').join( '\x00' * ( HASH_LEN - passLen ) )
+            xoredPass = xorString( alignedPass, challWithSecret )
             url = 'http://{0}:{1}/logon?username={2}&password={3}'.format( 
                 formData.get('hotspot_login_url'), model.get('uamport'),
-                formData.get('username'), percentEncode( xoredPass )
+                formData.get('username'), hexlify( xoredPass )
             )
             logIt( app.logger.debug, DEB_PREFIX, 'xored pass is {0}'.format( repr( xoredPass ) ) )
             logIt( app.logger.debug, DEB_PREFIX, 'OK. Render openwrt template' )
