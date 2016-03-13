@@ -170,6 +170,8 @@ def extractIdleTime(request):
 def extractAuthType(request):
     return getJson(request).get('session_hash', None)
 
+extractSessionHash = extractAuthType 
+
 def extractHotspotID(request):
     return getJson(request).get('hotspot_id', None)
 

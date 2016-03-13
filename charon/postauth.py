@@ -50,6 +50,7 @@ def authenticated(request):
 
     return result
 
+
 """
 The func inserts/updates user session limits data in charon_limits database.
 IN
@@ -57,7 +58,7 @@ IN
 OUT
     Bool
 """
-def updateSessionLimits(request):
+def updateSession(request):
     h = app.config.get('DB_HOST')
     d = app.config.get('DB_NAME')
     u = app.config.get('DB_USER') 
@@ -69,7 +70,7 @@ def updateSessionLimits(request):
 
     clientID = extractUserName(request)
     idleTime = extractIdleTime(request)
-    authType = extractAuthType(request)
+    authType = extractAuthType(request) #should be changed to sessionHash
     hotspotID = extractHotspotID(request)
     sessionLimit = extractSessionLimit(request)
     traffLimit = extractTraffLimit(request)
@@ -95,6 +96,7 @@ def updateSessionLimits(request):
             (authType, idleTime, sessionLimit, traffLimit, clientID, hotspotID,
  clientID, hotspotID)
         )
+
         c.commit()
         result = True
     except pgError as e:
@@ -105,6 +107,8 @@ def updateSessionLimits(request):
     logIt( app.logger.debug, DEB_PREFIX, 'returns', result )
 
     return result
+
+updateSessionLimits = updateSession
 
 """
 The func inserts user data into RADIUS database.
@@ -124,13 +128,17 @@ def allowRadiusSubs(request):
     inputJSON = getJson(request)
     logIt( app.logger.debug, DEB_PREFIX, 'request json', json_dumps(inputJSON) )
 
-    userMAC = userName = extractUserName(request)
+    userMAC = userName = clientID = extractUserName(request)
+    hotspotID = extractHotspotID(request)
     passWord = genPass()
     sessionTimeout = extractSessionLimit(request)
     traffLimit = extractTraffLimit(request)
+    shopsterSessionHash = extractSessionHash(request)
 
-    if None in (userName, passWord, sessionTimeout, traffLimit):
-        logIt( app.logger.error, DEB_PREFIX, 'Not enough data. userName {0}, pass {1}, TO {2}, traff {3}'.format( userName, passWord, sessionTimeout, traffLimit)
+    if None in (userName, hotspotID, passWord, sessionTimeout, traffLimit, shopsterSessionHash):
+        logIt( app.logger.error, DEB_PREFIX,\
+        'Not enough data. userName {}, hotspot_id {} pass {}, TO {}, traff {}, session {}'.format(\
+             userName, hotspotID, passWord, sessionTimeout, traffLimit, shopsterSessionHash)
         )
         logIt( app.logger.debug, DEB_PREFIX, 'returns', result )
         return result
@@ -170,6 +178,32 @@ def allowRadiusSubs(request):
             (username,attribute,op,value) \
             SELECT %s,%s,%s,%s WHERE NOT EXISTS (SELECT 1 FROM radreply WHERE username=%s AND attribute=%s AND op=%s);',
             (userName, 'Mikrotik-Total-Limit', FREERAD_ADD_OP, traffLimit, userName, 'Mikrotik-Total-Limit', FREERAD_ADD_OP)
+        )
+
+        cursor.execute( 'SELECT origin_url FROM charon_urls WHERE client_id=%s AND hotspot_id=%s;',\
+            (clientID, hotspotID),
+        )
+
+        row = cursor.fetchone()
+        if not row: #this check could cause unredictible behavior    
+            userUrl = ''
+            logIt( app.logger.error, DEB_PREFIX, 'origin_url data not found', result )
+        else:
+            userUrl = row[0]
+
+        openwrtRedirectUrl =  '{}?session_hash={}&origin_url={}'.format(\
+            app.config.get('POSTPOSTAUTH_URL'), shopsterSessionHash, userUrl \
+        ) 
+
+        cursor.execute('UPDATE radreply\
+            SET value=%s\
+            WHERE username=%s AND attribute=%s AND op=%s;', 
+            (openwrtRedirectUrl, userName, 'WISPr-Redirection-URL', FREERAD_ADD_OP)
+        )        
+        cursor.execute('INSERT INTO radreply \
+            (username,attribute,op,value) \
+            SELECT %s,%s,%s,%s WHERE NOT EXISTS (SELECT 1 FROM radreply WHERE username=%s AND attribute=%s AND op=%s);',
+            (userName, 'WISPr-Redirection-URL', FREERAD_ADD_OP, openwrtRedirectUrl, userName, 'WISPr-Redirection-URL', FREERAD_ADD_OP)
         )
 
         c.commit()

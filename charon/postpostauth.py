@@ -139,9 +139,10 @@ def doPostPostauth():
             #16 bytes aligned password
             alignedPass = '{}{}'.format( formData.get('password'), '\x00' * ( HASH_LEN - passLen ) )            
             xoredPass = xorString( alignedPass, challWithSecret )
-            url = 'http://{0}:{1}/logon?username={2}&password={3}'.format( 
+            url = 'http://{}:{}/logon?username={}&password={}&userurl={}'.format( 
                 formData.get('hotspot_login_url'), model.get('uamport'),
-                formData.get('username'), hexlify( xoredPass )
+                formData.get('username'), hexlify( xoredPass ),
+                formData.get('origin_url')
             )
             logIt( app.logger.debug, DEB_PREFIX, 'challWithSecret is {}'.format( hexlify( challWithSecret ) ) )
             logIt( app.logger.debug, DEB_PREFIX, 'aligned pass is {}'.format( hexlify( alignedPass ) ) )
