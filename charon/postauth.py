@@ -179,7 +179,18 @@ def allowRadiusSubs(request):
             SELECT %s,%s,%s,%s WHERE NOT EXISTS (SELECT 1 FROM radreply WHERE username=%s AND attribute=%s AND op=%s);',
             (userName, 'Mikrotik-Total-Limit', FREERAD_ADD_OP, traffLimit, userName, 'Mikrotik-Total-Limit', FREERAD_ADD_OP)
         )
-
+        
+        cursor.execute('UPDATE radreply\
+            SET value=%s\
+            WHERE username=%s AND attribute=%s AND op=%s;', 
+            (traffLimit, userName, 'CoovaChilli-Max-Total-Octets', FREERAD_ADD_OP)
+        )        
+        cursor.execute('INSERT INTO radreply \
+            (username,attribute,op,value) \
+            SELECT %s,%s,%s,%s WHERE NOT EXISTS (SELECT 1 FROM radreply WHERE username=%s AND attribute=%s AND op=%s);',
+            (userName, 'CoovaChilli-Max-Total-Octets', FREERAD_ADD_OP, traffLimit, userName, 'CoovaChilli-Max-Total-Octets', FREERAD_ADD_OP)
+        )
+        
         cursor.execute( 'SELECT origin_url FROM charon_urls WHERE client_id=%s AND hotspot_id=%s;',\
             (clientID, hotspotID),
         )

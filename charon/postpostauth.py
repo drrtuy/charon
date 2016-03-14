@@ -107,8 +107,7 @@ def doPostPostauth():
 
     hotspotType = session.get('hotspotType')
 
-    logIt( app.logger.debug, DEB_PREFIX, 'hotspot type is', hotspotType )
-    
+    logIt( app.logger.debug, DEB_PREFIX, 'hotspot type is', hotspotType )    
 
     waitTime = idleCheck(request)
     
