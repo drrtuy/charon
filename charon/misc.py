@@ -218,7 +218,7 @@ def getPreauthModel(request):
         result['original_url'] = request.values.get('original_url')
     elif hotspotType == 'ubiquity':
         result['client_id'] = request.args.get('id')
-        result['hotspot_id'] = request.args.get('ap')
+        result['hotspot_id'] = request.args.get('ap') 
         result['entrypoint_id'] = result['hotspot_id']
         result['original_url'] = request.args.get('url')
         result['hotspot_login_url'] = result['original_url']

@@ -13,4 +13,5 @@ APP_LOG_LEVEL = environ.get('APP_LOG_LEV')
 SECRET_KEY = 'ech5haisho8Ohri'
 OPENWRT_SECRET_KEY = 'shopster'
 UBNT_CONN_TO = 2
+#PREAUTH_TYPE_DS = []
 

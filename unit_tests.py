@@ -321,13 +321,33 @@ content_type = 'application/json')
             else:
                 self.assertTrue( charon.views.allowUbiquitySubs(r.request) )
 
-    def test_preauth_gethotspotid(self):
+    def test_preauth_gethotspottype(self):
         # fixt format ( data, method, result )
         fixt = []
+        #mt
         fixt.append( ( {'client_id': 'AA:BB:CC:DD:EE:FF', 'hotspot_id': '40D00276F319', 'entrypoint_id': '40D00276F319', 'original_url': 'www.sex.com', 'hotspot_login_url': 'http://hotspot.zerothree.su/login'}, 'POST', 'mikrotik'  ) )
-        fixt.append( ( 'ap=44:d9:e7:48:81:63', 'GET', 'ubiquity' ) )
-        fixt.append( ( '/preauth/?cmd=login&mac=24:0a:64:94:a3:a1&essid=shopster&ip=172.31.99.216&apname=ac%3Aa3%3A1e%3Ac5%3A8c%3A7c&vcname=instantC5%3A8C%3A7C&switchip=securelogin.arubanetworks.com&url=http%3A%2F%2Fyandex.ru%2F', 'GET', 'aruba' ) )
-        fixt.append( ('ap=outage', 'GET', 'outage' ) )
+        #unify
+        fixt.append( ( 'id=24:0a64:94:a3:a1&ap=44:d9:e7:48:81:63&t=1451112458&url=http://habr.ru/&ssid=lobster', 'GET', 'ubiquity' ) )
+        #aruba
+        fixt.append( ( 'cmd=login&mac=24:0a:64:94:a3:a1&essid=shopster&ip=172.31.99.216&apname=ac%3Aa3%3A1e%3Ac5%3A8c%3A7c&vcname=instantC5%3A8C%3A7C&switchip=securelogin.arubanetworks.com&url=http%3A%2F%2Fyandex.ru%2F', 'GET', 'aruba' ) )
+        #openwrt
+        fixt.append( ( 'res=notyet&uamip=192.168.182.1&uamport=3990&challenge=7236a55bca0afc59a033da4794bc1695\
+            &called=90-F6-52-5B-73-F4&mac=24-0A-64-94-A3-A1&ip=192.168.182.2&nasid=nas01\
+            &sessionid=56af2e1d00000001&userurl=http%3a%2f%2fya.ru',
+            'GET',
+            'openwrt'
+        ) )
+        #ruckus
+        fixt.append( ('sip=192.168.88.237&mac=6caab339afe0&client_mac=240a6494a3a1&uip=192.168.88.252\
+           &lid=&dn=&url=http%3a%2f%2fya.ru%2f&ssid=shopster%2druckus&loc=&vlan=1',
+           'GET',
+            'ruckus'       
+        ) )        
+        #cisco
+        fixt.append( ( 'id=24:0a64:94:a3:a1&ap=44:d9:e7:48:81:63&t=1451112458&url=http://habr.ru/&ssid=lobster',
+        'GET', 'ubiquity' ) )
+        #outage. legacy check
+        #fixt.append( ('ap=outage', 'GET', 'outage' ) )
         fixt.append( ( {}, 'POST', None ) )
         fixt.append( ( '', 'GET', None ) )            
         def make_test(f):
@@ -342,15 +362,13 @@ content_type = 'application/json')
                     query_string =  data
                 )
             #print "make_test result", charon.views.getHotspotId(r.request)
-            if isinstance( result, str ):
-                self.assertIn( result, charon.views.getHotspotId(r.request) )
-            elif result == None:
-                self.assertEqual( None, charon.views.getHotspotId(r.request) )
-
+            self.assertEqual( result, charon.views.getHotspotType(r.request) )
+          
         for f, e in zip( fixt, range( len(fixt) ) ):
             make_test(f)
 
-    "Add Ruckus, Aruba, OpenWRT"
+
+    #"Add Ruckus, Aruba, OpenWRT"
 
     def test_getPreauthTemplateData(self):
     
@@ -395,6 +413,8 @@ content_type = 'application/json')
                elif method == 'GET':
                   c.get( path='/preauth/', query_string = data )
                   make_test(f)
+
+    
               
 
 if __name__ == '__main__':

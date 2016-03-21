@@ -15,14 +15,16 @@ RUCKUS_PREAUTH_VARS = ['mac', 'client_mac', 'url']
 OPENWRT_PREAUTH_VARS = ['userurl', 'uamip', 'uamport', 'mac']
 DEB_PREFIX = 'preauth'
 
+
 """
+LEGACY. SHOULD BE REMOVED.
 Method get a HotSpot id via Shopster API.
 IN
     request: Flask.Request
 OUT
-    None || one of the hotspot types as a string
+    None || a hotspot type as a string
 """
-def getHotspotType(request):
+def getHotspotType_old(request):
 
     result = None
     h_id = None
@@ -61,7 +63,58 @@ def getHotspotType(request):
 
     return result 
 
-getHotspotId = getHotspotType
+getHotspotId = getHotspotType_old #getHotspotType
+
+"""
+Method to find out a hotspot type localy.
+IN
+    request: Flask.Request
+OUT
+    None || a hotspot type as a string
+"""
+def getHotspotType(request):
+
+    logIt( app.logger.debug, DEB_PREFIX, ' request args ', request.values.to_dict(flat = False) )
+
+    result = None
+    ds = app.config.get('PREAUTH_TYPE_DS', None)
+    if ds == None:
+        logIt( app.logger.debug, DEB_PREFIX, ' returns ', result )
+        return result
+
+    for typeObj in ds:
+        hotspotType = checkHotspotType( typeObj, request )
+        if hotspotType != None:
+            result = hotspotType
+            break      
+
+    logIt( app.logger.debug, DEB_PREFIX, ' returns ', result )
+
+    return result 
+
+"""
+Compares request variable names with a list that corresponds with a type.
+IN
+    request: Flask.Request
+    typeObj: dict example { 'type': 'mikrotik', 'method': 'POST', 'attrs':[ 'hotspot_id' ] }
+OUT
+    None || a hotspot type as a string
+"""
+def checkHotspotType( typeObj, request):
+
+    logIt( app.logger.debug, DEB_PREFIX, ' request args ', request.values.to_dict(flat = False) )
+
+    result = None
+    typeName = typeObj.get( 'type', None )     
+    for varName in typeObj.get( 'attrs' ):
+        print "checkHotspotType", typeName, varName
+        if request.values.get( varName, default = None ) == None:
+            return result
+                    
+    result = typeName
+    logIt( app.logger.debug, DEB_PREFIX, ' returns ', result )
+
+    return result
 
 """
 Method checks POST variable list for completness and correctness.
@@ -200,6 +253,7 @@ def doPreauth():
 
     hotspotType = getHotspotType(request)
 
+    #FIX. Must be changed
     if hotspotType == 'mikrotik':
         POSTVarsNames = MT_PREAUTH_VARS
     elif hotspotType == 'ubiquity':    
