@@ -107,7 +107,6 @@ def checkHotspotType( typeObj, request):
     result = None
     typeName = typeObj.get( 'type', None )     
     for varName in typeObj.get( 'attrs' ):
-        print "checkHotspotType", typeName, varName
         if request.values.get( varName, default = None ) == None:
             return result
                     

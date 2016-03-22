@@ -221,18 +221,18 @@ def getPreauthModel(request):
         result['hotspot_id'] = request.args.get('ap') 
         result['entrypoint_id'] = result['hotspot_id']
         result['original_url'] = request.args.get('url')
-        result['hotspot_login_url'] = result['original_url']
+        result['hotspot_login_url'] = result['original_url'] 
     elif hotspotType == 'aruba':
         result['client_id'] = request.args.get('mac')
-        result['hotspot_id'] = request.args.get('apname')
-        result['entrypoint_id'] = result['hotspot_id']
+        result['hotspot_id'] = request.args.get('vcname')
+        result['entrypoint_id'] = request.args.get('apname')
         result['original_url'] = request.args.get('url')
         result['hotspot_login_url'] = 'http://{0}/cgi-bin/login'.format( request.args.get('switchip') )
     elif hotspotType == 'ruckus':
         #result = Ruckus()
         result['client_id'] = request.args.get('client_mac')
         result['hotspot_id'] = request.args.get('mac')
-        result['entrypoint_id'] = result['hotspot_id']
+        result['entrypoint_id'] = request.args.get('lid')
         result['original_url'] = request.args.get('url')
         result['hotspot_login_url'] = request.args.get('sip')
         result['uip'] = request.args.get('uip')
